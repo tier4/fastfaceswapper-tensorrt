@@ -75,13 +75,9 @@ class InferenceEngine {
         return absl::InternalError(elemSizeOr.status().message());
       }
       std::size_t bindingSize = size * elemSizeOr.value();  // Assuming float data type
-      auto strOr = dataTypeToString(dtype);
-      if (!strOr.ok()) {
-        return absl::InternalError(strOr.status().message());
-      }
       logger_->log(nvinfer1::ILogger::Severity::kINFO,
-                   absl::StrFormat("Allocating memory for tensor: %s (dtype: %s), size: %d",
-                                   tensorName, strOr.value(), bindingSize)
+                   absl::StrFormat("Allocating memory for tensor: %s (%s), size: %d", tensorName,
+                                   engine_->getTensorFormatDesc(tensorName), bindingSize)
                        .c_str());
 
       dbuffs_.emplace_back(cuda_utils::make_unique<std::uint8_t[]>(bindingSize));
