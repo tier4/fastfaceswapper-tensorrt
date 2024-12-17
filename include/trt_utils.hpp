@@ -8,6 +8,20 @@
 
 namespace trt_utils {
 
+// Function to convert nvinfer1::Dims to a string
+std::string dimsToString(const nvinfer1::Dims& dims) {
+  std::ostringstream oss;
+  oss << "[";
+  for (int i = 0; i < dims.nbDims; ++i) {
+    oss << dims.d[i];
+    if (i < dims.nbDims - 1) {
+      oss << ", ";
+    }
+  }
+  oss << "]";
+  return oss.str();
+}
+
 // Custom Logger class
 class Logger : public nvinfer1::ILogger {
  public:
