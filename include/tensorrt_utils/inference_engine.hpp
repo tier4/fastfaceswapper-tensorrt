@@ -13,6 +13,8 @@ namespace tensorrt_utils {
 
 class InferenceEngine {
  public:
+  // Constructor for InferenceEngine
+  // Initializes the engine by deserializing the engine file and setting up the execution context
   InferenceEngine(const std::filesystem::path& enginePath, nvinfer1::ILogger& logger,
                   const std::int32_t maxBs) {
     // Read the engine file using readEngineFile function
@@ -53,14 +55,23 @@ class InferenceEngine {
   }
 
  private:
+  // TensorRT engine
   std::unique_ptr<nvinfer1::ICudaEngine> engine_;
+  // Execution context for the engine
   std::unique_ptr<nvinfer1::IExecutionContext> context_;
+  // Logger for TensorRT
   nvinfer1::ILogger* logger_;
+  // Device buffers for input/output tensors
   std::vector<cuda_utils::CudaUniquePtr<std::uint8_t[]>> dbuffs_;
+  // Host buffers for input/output tensors
   std::vector<cuda_utils::CudaUniquePtrHost<std::uint8_t[]>> hbuffs_;
+  // Maximum batch size
   std::int32_t maxBs_;
+  // CUDA stream for asynchronous operations
   cuda_utils::StreamUniquePtr stream_{cuda_utils::makeCudaStream()};
 
+  // Sets the batch size for the engine
+  // Returns an error if the batch size is invalid
   absl::Status setBs(const std::int32_t bs) {
     if (bs < 1 || bs > maxBs_) {
       return absl::InvalidArgumentError(
@@ -80,6 +91,8 @@ class InferenceEngine {
     return absl::OkStatus();
   }
 
+  // Allocates memory for input and output tensors
+  // Returns an error if memory allocation fails
   absl::Status allocateMemory() {
     // Allocate memory for input and output tensors
     std::int32_t nbBindings = engine_->getNbIOTensors();
@@ -112,6 +125,7 @@ class InferenceEngine {
     return absl::OkStatus();
   }
 };
+
 }  // namespace tensorrt_utils
 
-#endif
+#endif  // __TENSORRT_UTILS__INFERENCE_ENGINE_HPP__
