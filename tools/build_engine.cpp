@@ -103,13 +103,7 @@ int main(int argc, char **argv) {
 
   // Initialize TensorRT builder
   auto builder = nvinfer1::createInferBuilder(logger);
-#if NV_TENSORRT_MAJOR >= 10
   auto network = builder->createNetworkV2(0U);
-#else
-  const auto explicit_batch =
-      1U << static_cast<std::uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
-  auto network = builder->createNetworkV2(explicit_batch);
-#endif
   auto config = builder->createBuilderConfig();
 
   // Set optimization level
