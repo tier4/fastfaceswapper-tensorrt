@@ -55,8 +55,8 @@ class InferenceEngine {
   std::unique_ptr<nvinfer1::ICudaEngine> engine_;
   std::unique_ptr<nvinfer1::IExecutionContext> context_;
   nvinfer1::ILogger* logger_;
-  std::vector<cuda_utils::CudaUniquePtr<float[]>> dbuffs_;
-  std::vector<cuda_utils::CudaUniquePtrHost<float[]>> hbuffs_;
+  std::vector<cuda_utils::CudaUniquePtr<std::uint8_t[]>> dbuffs_;
+  std::vector<cuda_utils::CudaUniquePtrHost<std::uint8_t[]>> hbuffs_;
   std::int32_t maxBs_;
 
   absl::Status allocateMemory() {
@@ -65,15 +65,28 @@ class InferenceEngine {
     for (int i = 0; i < nbBindings; ++i) {
       auto tensorName = engine_->getIOTensorName(i);
       nvinfer1::Dims dims = engine_->getTensorShape(tensorName);
+      auto dtype = engine_->getTensorDataType(tensorName);
       size_t size = maxBs_;
       for (std::int32_t j = 1; j < dims.nbDims; ++j) {
         size *= dims.d[j];
       }
-      std::size_t bindingSize = size * sizeof(float);  // Assuming float data type
+      auto elemSizeOr = dataTypeToSize(dtype);
+      if (!elemSizeOr.ok()) {
+        return absl::InternalError(elemSizeOr.status().message());
+      }
+      std::size_t bindingSize = size * elemSizeOr.value();  // Assuming float data type
+      auto strOr = dataTypeToString(dtype);
+      if (!strOr.ok()) {
+        return absl::InternalError(strOr.status().message());
+      }
+      logger_->log(nvinfer1::ILogger::Severity::kINFO,
+                   absl::StrFormat("Allocating memory for tensor: %s (dtype: %s), size: %d",
+                                   tensorName, strOr.value(), bindingSize)
+                       .c_str());
 
-      dbuffs_.emplace_back(cuda_utils::make_unique<float[]>(bindingSize));
+      dbuffs_.emplace_back(cuda_utils::make_unique<std::uint8_t[]>(bindingSize));
       hbuffs_.emplace_back(
-          cuda_utils::make_unique_host<float[]>(bindingSize, cudaHostAllocPortable));
+          cuda_utils::make_unique_host<std::uint8_t[]>(bindingSize, cudaHostAllocPortable));
       if (!context_->setTensorAddress(tensorName, dbuffs_.at(i).get())) {
         return absl::InternalError(
             absl::StrFormat("Failed to set tensor address for tensor: %s", tensorName));

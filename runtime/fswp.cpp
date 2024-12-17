@@ -44,11 +44,10 @@ int main(int argc, char** argv) {
   const auto parsed = args.value();
 
   // Initialize logger
-  tensorrt_utils::Logger logger;
+  tensorrt_utils::Logger logger(nvinfer1::ILogger::Severity::kINFO);
 
   // Create InferenceEngine object
   tensorrt_utils::InferenceEngine engine(parsed.engine_path, logger, parsed.maxBs);
-  LOG(INFO) << "Successfully created InferenceEngine object";
 
   return 0;
 }
