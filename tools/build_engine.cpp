@@ -45,7 +45,7 @@ absl::StatusOr<std::tuple<std::int32_t, std::int32_t, std::int32_t>> parseBatchS
 
 // Structure to hold parsed arguments
 typedef struct ParsedArgs {
-  std::filesystem::path onnx_path;
+  std::filesystem::path engine_path;
   std::filesystem::path out_path;
   std::int32_t opt;
   bool sparsity;
@@ -78,7 +78,7 @@ absl::StatusOr<ParsedArgs> validateFlags() {
   if (!bs.ok()) {
     return absl::Status(absl::StatusCode::kInvalidArgument, bs.status().message());
   }
-  args.onnx_path = FLAGS_onnx_path;
+  args.engine_path = FLAGS_onnx_path;
   args.out_path = FLAGS_out_path;
   args.opt = FLAGS_opt;
   args.sparsity = FLAGS_sparsity;
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
 
   // Parse ONNX model
   auto parser = nvonnxparser::createParser(*network, logger);
-  if (!parser->parseFromFile(parsed.onnx_path.c_str(),
+  if (!parser->parseFromFile(parsed.engine_path.c_str(),
                              static_cast<std::int32_t>(nvinfer1::ILogger::Severity::kINFO))) {
     LOG(ERROR) << "Failed to parse ONNX file";
     for (std::int32_t i = 0; i < parser->getNbErrors(); ++i) {

@@ -4,6 +4,7 @@
 #include <NvInfer.h>
 
 #include <cuda_utils/cuda_unique_ptr.hpp>
+#include <filesystem>
 #include <iostream>
 #include <tensorrt_utils/tensorrt_utils.hpp>
 #include <unordered_map>
@@ -12,7 +13,8 @@ namespace tensorrt_utils {
 
 class InferenceEngine {
  public:
-  InferenceEngine(const std::string& enginePath, Logger& logger, const std::int32_t maxBs) {
+  InferenceEngine(const std::filesystem::path& enginePath, nvinfer1::ILogger& logger,
+                  const std::int32_t maxBs) {
     // Read the engine file using readEngineFile function
     auto engineDataOr = readEngineFile(enginePath);
     if (!engineDataOr.ok()) {
@@ -26,7 +28,7 @@ class InferenceEngine {
       throw std::runtime_error("Failed to create TensorRT runtime");
     }
 
-    logger_ = std::shared_ptr<Logger>(&logger);
+    logger_ = std::shared_ptr<nvinfer1::ILogger>(&logger);
     auto engine = runtime->deserializeCudaEngine(engineData.data(), engineData.size());
     if (!engine) {
       throw std::runtime_error("Failed to deserialize CUDA engine");
@@ -58,8 +60,8 @@ class InferenceEngine {
  private:
   std::unique_ptr<nvinfer1::ICudaEngine> engine_;
   std::unique_ptr<nvinfer1::IExecutionContext> context_;
-  std::shared_ptr<tensorrt_utils::Logger> logger_;
-  std::unordered_map<std::string, cuda_utils::CudaUniquePtr<void>> buffs_;
+  std::shared_ptr<nvinfer1::ILogger> logger_;
+  std::unordered_map<std::string, cuda_utils::CudaUniquePtr<float[]>> buffs_;
   std::int32_t maxBs_;
 
   absl::Status allocateMemory() {
@@ -74,8 +76,8 @@ class InferenceEngine {
       }
       std::size_t bindingSize = size * sizeof(float);  // Assuming float data type
 
-      buffs_[tensorName] = cuda_utils::make_unique<void>(bindingSize);
-      if (!context_->setTensorAddress(tensorName, buffs_[tensorName].get())) {
+      buffs_[tensorName] = cuda_utils::make_unique<float[]>(bindingSize);
+      if (!context_->setTensorAddress(tensorName.c_str(), buffs_[tensorName].get())) {
         return absl::InternalError(
             absl::StrFormat("Failed to set tensor address for tensor: %s", tensorName));
       }

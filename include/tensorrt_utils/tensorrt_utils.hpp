@@ -5,6 +5,8 @@
 #include <absl/log/log.h>
 #include <absl/status/statusor.h>
 
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 
 namespace tensorrt_utils {
@@ -48,10 +50,10 @@ class Logger : public nvinfer1::ILogger {
   Severity mSeverity;  // Configured minimum severity level
 };
 
-absl::StatusOr<std::vector<std::uint8_t>> readEngineFile(const std::string& enginePath) {
+absl::StatusOr<std::vector<std::uint8_t>> readEngineFile(const std::filesystem::path& enginePath) {
   std::ifstream file(enginePath, std::ios::binary);
   if (!file) {
-    return absl::NotFoundError("Failed to open engine file: " + enginePath);
+    return absl::NotFoundError("Failed to open engine file: " + enginePath.string());
   }
 
   file.seekg(0, file.end);
