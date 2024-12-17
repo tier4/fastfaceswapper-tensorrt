@@ -4,6 +4,7 @@
 #include <NvInfer.h>
 
 #include <cuda_utils/cuda_unique_ptr.hpp>
+#include <cuda_utils/stream_unique_ptr.hpp>
 #include <filesystem>
 #include <iostream>
 #include <tensorrt_utils/tensorrt_utils.hpp>
@@ -58,14 +59,34 @@ class InferenceEngine {
   std::vector<cuda_utils::CudaUniquePtr<std::uint8_t[]>> dbuffs_;
   std::vector<cuda_utils::CudaUniquePtrHost<std::uint8_t[]>> hbuffs_;
   std::int32_t maxBs_;
+  cuda_utils::StreamUniquePtr stream_{cuda_utils::makeCudaStream()};
+
+  absl::Status setBs(const std::int32_t bs) {
+    if (bs < 1 || bs > maxBs_) {
+      return absl::InvalidArgumentError(
+          absl::StrFormat("Batch size must be between 1 and %d", maxBs_));
+    }
+    for (std::int32_t i = 0; i < engine_->getNbIOTensors(); ++i) {
+      const auto tensorName = engine_->getIOTensorName(i);
+      if (engine_->getTensorIOMode(tensorName) == nvinfer1::TensorIOMode::kINPUT) {
+        auto dims = engine_->getTensorShape(tensorName);
+        dims.d[0] = bs;
+        if (!context_->setInputShape(tensorName, dims)) {
+          return absl::InternalError(
+              absl::StrFormat("Failed to set input shape for tensor: %s", tensorName));
+        }
+      }
+    }
+    return absl::OkStatus();
+  }
 
   absl::Status allocateMemory() {
     // Allocate memory for input and output tensors
     std::int32_t nbBindings = engine_->getNbIOTensors();
     for (int i = 0; i < nbBindings; ++i) {
-      auto tensorName = engine_->getIOTensorName(i);
-      nvinfer1::Dims dims = engine_->getTensorShape(tensorName);
-      auto dtype = engine_->getTensorDataType(tensorName);
+      const auto tensorName = engine_->getIOTensorName(i);
+      const auto dims = engine_->getTensorShape(tensorName);
+      const auto dtype = engine_->getTensorDataType(tensorName);
       size_t size = maxBs_;
       for (std::int32_t j = 1; j < dims.nbDims; ++j) {
         size *= dims.d[j];
