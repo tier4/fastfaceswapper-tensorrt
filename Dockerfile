@@ -13,7 +13,7 @@ RUN apt update -y && \
     apt install -y libopencv-dev cppcheck clang-format bash-completion && \
     rm -rf /var/lib/apt/lists/*
 
-# Change uid & gid of existing non-root user "ubuntu"
+# Change uid & gid of pre-built user "ubuntu" to the same ids of the host user
 RUN groupmod -g ${GID} ubuntu && \
     usermod -u ${UID} -g ${GID} ubuntu && \
     chown -R ${UID}:${GID} ${UHOME}/

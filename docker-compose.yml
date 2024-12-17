@@ -13,9 +13,9 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    command: ["/bin/bash", "-c", "while true; do sleep 1000; done"]
+    command: sleep infinity
     volumes:
       - type: bind
         source: .
-        target: /home/user/app/
+        target: /home/ubuntu/app/
         consistency: delegated

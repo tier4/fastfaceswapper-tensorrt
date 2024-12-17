@@ -4,7 +4,7 @@
         "docker-compose.yml"
     ],
     "service": "app",
-    "workspaceFolder": "/home/user/app",
+    "workspaceFolder": "/home/ubuntu/app",
     "customizations": {
         "vscode": {
             "settings": {
