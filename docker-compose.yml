@@ -1,0 +1,21 @@
+services:
+  app:
+    ipc: host
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        UID: ${UID:-1000}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: ["/bin/bash", "-c", "while true; do sleep 1000; done"]
+    volumes:
+      - type: bind
+        source: .
+        target: /home/user/app/
+        consistency: delegated
