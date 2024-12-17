@@ -15,8 +15,10 @@ class Logger : public nvinfer1::ILogger {
   explicit Logger(nvinfer1::ILogger::Severity severity = nvinfer1::ILogger::Severity::kWARNING)
       : mSeverity(severity) {}
 
+  // The log function is overridden to handle logging messages based on severity
+  // Note: Higher severity levels are assigned lower integer values
   void log(Severity severity, const char* msg) noexcept override {
-    if (severity >= mSeverity) {
+    if (severity <= mSeverity) {
       switch (severity) {
         case Severity::kINTERNAL_ERROR:
           LOG(ERROR) << msg;
