@@ -13,8 +13,8 @@ find_package(absl REQUIRED)
 
 set(CMAKE_CUDA_FLAG "${CMAKE_CUDA_FLAG} -O3")
 
-include_directories(/usr/local/cuda/include ${CMAKE_SOURCE_DIR}/include)
-link_directories(/usr/local/cuda/lib64)
+include_directories(/usr/local/cuda/include /usr/local/cuda/targets/x86_64-linux/include ${CMAKE_SOURCE_DIR}/include)
+link_directories(/usr/local/cuda/lib64 /usr/local/cuda/targets/x86_64-linux/lib)
 
 add_subdirectory(tools)
 add_subdirectory(runtime)

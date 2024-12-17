@@ -31,12 +31,12 @@ class InferenceEngine {
     if (!engine) {
       throw std::runtime_error("Failed to deserialize CUDA engine");
     }
-    engine_ = std::shared_ptr<nvinfer1::ICudaEngine>(engine);
+    engine_ = std::unique_ptr<nvinfer1::ICudaEngine>(engine);
     auto context = engine_->createExecutionContext();
     if (!context) {
       throw std::runtime_error("Failed to create execution context");
     }
-    context_ = std::shared_ptr<nvinfer1::IExecutionContext>(context);
+    context_ = std::unique_ptr<nvinfer1::IExecutionContext>(context);
 
     if (maxBs < 1) {
       throw std::runtime_error("Maximum batch size must be greater than 0");
@@ -53,43 +53,32 @@ class InferenceEngine {
     }
   }
 
-  ~InferenceEngine() {
-    for (auto& pair : buffs_) {
-      pair.second.reset();
-    }
-    context_.reset();
-    engine_.reset();
-  }
+  ~InferenceEngine() { engine_.reset(); }
 
  private:
-  std::shared_ptr<nvinfer1::ICudaEngine> engine_;
-  std::shared_ptr<nvinfer1::IExecutionContext> context_;
+  std::unique_ptr<nvinfer1::ICudaEngine> engine_;
+  std::unique_ptr<nvinfer1::IExecutionContext> context_;
   std::shared_ptr<tensorrt_utils::Logger> logger_;
-  std::unordered_map<std::string, std::shared_ptr<void>> buffs_;
+  std::unordered_map<std::string, cuda_utils::CudaUniquePtr<void>> buffs_;
   std::int32_t maxBs_;
 
   absl::Status allocateMemory() {
     // Allocate memory for input and output tensors
     std::int32_t nbBindings = engine_->getNbIOTensors();
     for (int i = 0; i < nbBindings; ++i) {
-      auto tensorName = engine_->getIOTensorName(i);
-      nvinfer1::Dims dims = engine_->getTensorShape(tensorName);
+      auto tensorName = std::string(engine_->getIOTensorName(i));
+      nvinfer1::Dims dims = engine_->getTensorShape(tensorName.c_str());
       size_t size = maxBs_;
       for (std::int32_t j = 1; j < dims.nbDims; ++j) {
         size *= dims.d[j];
       }
       std::size_t bindingSize = size * sizeof(float);  // Assuming float data type
 
-      void* buffer;
-      if (cudaMalloc(&buffer, bindingSize) != cudaSuccess) {
-        return absl::InternalError(
-            absl::StrFormat("Failed to allocate CUDA memory for tensor: %s", tensorName));
-      }
-      if (!context_->setTensorAddress(tensorName, buffer)) {
+      buffs_[tensorName] = cuda_utils::make_unique<void>(bindingSize);
+      if (!context_->setTensorAddress(tensorName, buffs_[tensorName].get())) {
         return absl::InternalError(
             absl::StrFormat("Failed to set tensor address for tensor: %s", tensorName));
       }
-      buffs_[std::string(tensorName)] = std::shared_ptr<void>(buffer, cudaFree);
     }
     return absl::OkStatus();
   }

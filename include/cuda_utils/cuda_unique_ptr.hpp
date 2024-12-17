@@ -20,10 +20,9 @@
 #ifndef CUDA_UTILS__CUDA_UNIQUE_PTR_HPP_
 #define CUDA_UTILS__CUDA_UNIQUE_PTR_HPP_
 
+#include <cuda_utils/cuda_check_error.hpp>
 #include <memory>
 #include <type_traits>
-
-#include "cuda_utils/cuda_check_error.hpp"
 
 namespace cuda_utils {
 struct CudaDeleter {
