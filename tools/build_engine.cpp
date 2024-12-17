@@ -10,7 +10,7 @@
 #include <fstream>
 #include <iostream>
 
-#include "../include/trt_utils.hpp"
+#include "tensorrt_utils/tensorrt_utils.hpp"
 
 // Define command line flags
 DEFINE_string(onnx_path, "", "Path to the input ONNX file (required).");
@@ -99,7 +99,7 @@ int main(int argc, char **argv) {
   const auto parsed = args.value();
 
   // Initialize logger
-  auto logger = trt_utils::Logger(nvinfer1::ILogger::Severity::kINFO);
+  auto logger = tensorrt_utils::Logger(nvinfer1::ILogger::Severity::kINFO);
 
   // Initialize TensorRT builder
   auto builder = nvinfer1::createInferBuilder(logger);
@@ -141,7 +141,7 @@ int main(int argc, char **argv) {
     auto tensor = network->getInput(i);
     auto shape = tensor->getDimensions();
     LOG(INFO) << absl::StrFormat("Input (%s): %s", tensor->getName(),
-                                 trt_utils::dimsToString(shape));
+                                 tensorrt_utils::dimsToString(shape));
     if (shape.d[0] > 0) {
       shape.d[0] = -1;
       tensor->setDimensions(shape);

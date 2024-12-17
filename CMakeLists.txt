@@ -17,3 +17,4 @@ include_directories(/usr/local/cuda/include ${CMAKE_SOURCE_DIR}/include)
 link_directories(/usr/local/cuda/lib64)
 
 add_subdirectory(tools)
+add_subdirectory(runtime)
