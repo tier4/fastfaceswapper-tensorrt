@@ -15,8 +15,7 @@ class InferenceEngine {
  public:
   // Constructor for InferenceEngine
   // Initializes the engine by deserializing the engine file and setting up the execution context
-  InferenceEngine(const std::filesystem::path& enginePath, nvinfer1::ILogger& logger,
-                  const std::int32_t maxBs) {
+  InferenceEngine(const std::filesystem::path& enginePath, nvinfer1::ILogger& logger) {
     // Read the engine file using readEngineFile function
     auto engineDataOr = readEngineFile(enginePath);
     if (!engineDataOr.ok()) {
@@ -35,17 +34,28 @@ class InferenceEngine {
     if (!engine) {
       throw std::runtime_error("Failed to deserialize CUDA engine");
     }
+    logger_->log(nvinfer1::ILogger::Severity::kINFO,
+                 absl::StrFormat("Deserialized engine from file: %s", enginePath).c_str());
     engine_ = std::unique_ptr<nvinfer1::ICudaEngine>(engine);
     auto context = engine_->createExecutionContext();
     if (!context) {
       throw std::runtime_error("Failed to create execution context");
     }
     context_ = std::unique_ptr<nvinfer1::IExecutionContext>(context);
+    context_->setOptimizationProfileAsync(0, *stream_);
 
-    if (maxBs < 1) {
-      throw std::runtime_error("Maximum batch size must be greater than 0");
+    // Get min and max batch sizes for the engine
+    const auto bsOr = getProfileBatchSizes(engine_.get(), 0);
+    if (!bsOr.ok()) {
+      throw std::runtime_error(std::string(bsOr.status().message()));
     }
+    const auto [minBs, optBs, maxBs] = bsOr.value();
+    minBs_ = minBs;
     maxBs_ = maxBs;
+    optBs_ = optBs;
+    logger_->log(
+        nvinfer1::ILogger::Severity::kINFO,
+        absl::StrFormat("Batch sizes: min: %d, opt: %d, max: %d", minBs_, optBs_, maxBs_).c_str());
 
     // Allocate memory for binding buffers
     auto status = allocateMemory();
@@ -65,17 +75,21 @@ class InferenceEngine {
   std::vector<cuda_utils::CudaUniquePtr<std::uint8_t[]>> dbuffs_;
   // Host buffers for input/output tensors
   std::vector<cuda_utils::CudaUniquePtrHost<std::uint8_t[]>> hbuffs_;
-  // Maximum batch size
-  std::int32_t maxBs_;
   // CUDA stream for asynchronous operations
   cuda_utils::StreamUniquePtr stream_{cuda_utils::makeCudaStream()};
+  // Minimum batch size for the engine
+  std::int32_t minBs_;
+  // Maximum batch size for the engine
+  std::int32_t maxBs_;
+  // Optimum batch size for the engine
+  std::int32_t optBs_;
 
   // Sets the batch size for the engine
   // Returns an error if the batch size is invalid
   absl::Status setBs(const std::int32_t bs) {
-    if (bs < 1 || bs > maxBs_) {
+    if (bs < minBs_ || bs > maxBs_) {
       return absl::InvalidArgumentError(
-          absl::StrFormat("Batch size must be between 1 and %d", maxBs_));
+          absl::StrFormat("Invalid batch size: %d, min: %d, max: %d", bs, minBs_, maxBs_));
     }
     for (std::int32_t i = 0; i < engine_->getNbIOTensors(); ++i) {
       const auto tensorName = engine_->getIOTensorName(i);
@@ -100,6 +114,7 @@ class InferenceEngine {
       const auto tensorName = engine_->getIOTensorName(i);
       const auto dims = engine_->getTensorShape(tensorName);
       const auto dtype = engine_->getTensorDataType(tensorName);
+      const bool isInput = engine_->getTensorIOMode(tensorName) == nvinfer1::TensorIOMode::kINPUT;
       size_t size = maxBs_;
       for (std::int32_t j = 1; j < dims.nbDims; ++j) {
         size *= dims.d[j];
@@ -110,7 +125,8 @@ class InferenceEngine {
       }
       std::size_t bindingSize = size * elemSizeOr.value();  // Assuming float data type
       logger_->log(nvinfer1::ILogger::Severity::kINFO,
-                   absl::StrFormat("Allocating memory for tensor: %s (%s), size: %d", tensorName,
+                   absl::StrFormat("Allocating memory for %s tensor: name=%s (%s), size=%d",
+                                   isInput ? "input" : "output", tensorName,
                                    engine_->getTensorFormatDesc(tensorName), bindingSize)
                        .c_str());
 

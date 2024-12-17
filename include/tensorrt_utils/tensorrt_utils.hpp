@@ -121,6 +121,30 @@ absl::StatusOr<std::vector<std::uint8_t>> readEngineFile(const std::filesystem::
   return engineData;
 }
 
+absl::StatusOr<std::tuple<std::int32_t, std::int32_t, std::int32_t>> getProfileBatchSizes(
+    nvinfer1::ICudaEngine* engine, std::int32_t profileIndex) {
+  std::int32_t minBs = -1, optBs = -1, maxBs = -1;
+  for (std::int32_t i = 0; i < engine->getNbIOTensors(); ++i) {
+    const auto tensorName = engine->getIOTensorName(i);
+    if (engine->getTensorIOMode(tensorName) == nvinfer1::TensorIOMode::kINPUT) {
+      const auto minDims =
+          engine->getProfileShape(tensorName, profileIndex, nvinfer1::OptProfileSelector::kMIN);
+      const auto optDims =
+          engine->getProfileShape(tensorName, profileIndex, nvinfer1::OptProfileSelector::kOPT);
+      const auto maxDims =
+          engine->getProfileShape(tensorName, profileIndex, nvinfer1::OptProfileSelector::kMAX);
+      minBs = minDims.d[0];
+      optBs = optDims.d[0];
+      maxBs = maxDims.d[0];
+      break;
+    }
+  }
+  if (minBs == -1 || optBs == -1 || maxBs == -1) {
+    return absl::InternalError("Failed to get profile batch sizes");
+  }
+  return std::make_tuple(minBs, optBs, maxBs);
+}
+
 // Function to convert nvinfer1::Dims to a string
 std::string dimsToString(const nvinfer1::Dims& dims) {
   std::ostringstream oss;
