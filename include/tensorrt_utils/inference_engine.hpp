@@ -7,7 +7,6 @@
 #include <filesystem>
 #include <iostream>
 #include <tensorrt_utils/tensorrt_utils.hpp>
-#include <unordered_map>
 
 namespace tensorrt_utils {
 
@@ -28,7 +27,7 @@ class InferenceEngine {
       throw std::runtime_error("Failed to create TensorRT runtime");
     }
 
-    logger_ = std::shared_ptr<nvinfer1::ILogger>(&logger);
+    logger_ = &logger;
     auto engine = runtime->deserializeCudaEngine(engineData.data(), engineData.size());
     if (!engine) {
       throw std::runtime_error("Failed to deserialize CUDA engine");
@@ -45,9 +44,6 @@ class InferenceEngine {
     }
     maxBs_ = maxBs;
 
-    // Clean up runtime
-    delete runtime;
-
     // Allocate memory for binding buffers
     auto status = allocateMemory();
     if (!status.ok()) {
@@ -55,29 +51,30 @@ class InferenceEngine {
     }
   }
 
-  ~InferenceEngine() { engine_.reset(); }
-
  private:
   std::unique_ptr<nvinfer1::ICudaEngine> engine_;
   std::unique_ptr<nvinfer1::IExecutionContext> context_;
-  std::shared_ptr<nvinfer1::ILogger> logger_;
-  std::unordered_map<std::string, cuda_utils::CudaUniquePtr<float[]>> buffs_;
+  nvinfer1::ILogger* logger_;
+  std::vector<cuda_utils::CudaUniquePtr<float[]>> dbuffs_;
+  std::vector<cuda_utils::CudaUniquePtrHost<float[]>> hbuffs_;
   std::int32_t maxBs_;
 
   absl::Status allocateMemory() {
     // Allocate memory for input and output tensors
     std::int32_t nbBindings = engine_->getNbIOTensors();
     for (int i = 0; i < nbBindings; ++i) {
-      auto tensorName = std::string(engine_->getIOTensorName(i));
-      nvinfer1::Dims dims = engine_->getTensorShape(tensorName.c_str());
+      auto tensorName = engine_->getIOTensorName(i);
+      nvinfer1::Dims dims = engine_->getTensorShape(tensorName);
       size_t size = maxBs_;
       for (std::int32_t j = 1; j < dims.nbDims; ++j) {
         size *= dims.d[j];
       }
       std::size_t bindingSize = size * sizeof(float);  // Assuming float data type
 
-      buffs_[tensorName] = cuda_utils::make_unique<float[]>(bindingSize);
-      if (!context_->setTensorAddress(tensorName.c_str(), buffs_[tensorName].get())) {
+      dbuffs_.emplace_back(cuda_utils::make_unique<float[]>(bindingSize));
+      hbuffs_.emplace_back(
+          cuda_utils::make_unique_host<float[]>(bindingSize, cudaHostAllocPortable));
+      if (!context_->setTensorAddress(tensorName, dbuffs_.at(i).get())) {
         return absl::InternalError(
             absl::StrFormat("Failed to set tensor address for tensor: %s", tensorName));
       }
