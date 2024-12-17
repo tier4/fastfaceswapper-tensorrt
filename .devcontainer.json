@@ -1,59 +1,54 @@
 {
-    "name": "${localWorkspaceFolderBasename}",
-    "dockerComposeFile": [
-        "docker-compose.yml"
-    ],
-    "service": "app",
-    "workspaceFolder": "/home/ubuntu/app",
-    "customizations": {
-        "vscode": {
-            "settings": {
-                "files.exclude": {
-                    "**/.git": true
-                },
-                "search.exclude": {
-                    "**/.git": true
-                },
-                "editor.formatOnSave": true,
-                "editor.formatOnPaste": true,
-                "editor.codeActionsOnSave": {
-                    "source.fixAll": "explicit",
-                    "source.organizeImports": "explicit"
-                },
-                "c-cpp-flylint.cppcheck.enable": true,
-                "c-cpp-flylint.cppcheck.executable": "/usr/bin/cppcheck",
-                "c-cpp-flylint.cppcheck.extraArgs": [
-                    "--enable=all",
-                    "--std=c++17"
-                ],
-                "c-cpp-flylint.flawfinder.enable": false,
-                "c-cpp-flylint.lizard.enable": false,
-                "c-cpp-flylint.pclintplus.enable": false,
-                "c-cpp-flylint.flexelint.enable": false,
-                "c-cpp-flylint.clang.enable": false,
-                "C_Cpp.clang_format_path": "/usr/bin/clang-format",
-                "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
-                "C_Cpp.default.enableConfigurationSquiggles": true,
-                "[cpp]": {
-                    "editor.defaultFormatter": "ms-vscode.cpptools"
-                },
-                "[dockerfile]": {
-                    "editor.defaultFormatter": "ms-azuretools.vscode-docker"
-                },
-                "[jsonc]": {
-                    "editor.defaultFormatter": "esbenp.prettier-vscode"
-                },
-                "files.insertFinalNewline": true
-            },
-            "extensions": [
-                "oderwat.indent-rainbow",
-                "ms-vscode.cpptools-extension-pack",
-                "ms-vscode.cpptools",
-                "ms-vscode.cmake-tools",
-                "jbenden.c-cpp-flylint",
-                "esbenp.prettier-vscode",
-                "donjayamanne.githistory"
-            ]
-        }
+  "name": "${localWorkspaceFolderBasename}",
+  "dockerComposeFile": ["docker-compose.yml"],
+  "service": "app",
+  "workspaceFolder": "/home/ubuntu/app",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "files.exclude": {
+          "**/.git": true
+        },
+        "search.exclude": {
+          "**/.git": true
+        },
+        "editor.formatOnSave": true,
+        "editor.formatOnPaste": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll": "explicit",
+          "source.organizeImports": "explicit"
+        },
+        "c-cpp-flylint.cppcheck.enable": true,
+        "c-cpp-flylint.cppcheck.executable": "/usr/bin/cppcheck",
+        "c-cpp-flylint.cppcheck.extraArgs": ["--enable=all", "--std=c++17"],
+        "c-cpp-flylint.flawfinder.enable": false,
+        "c-cpp-flylint.lizard.enable": false,
+        "c-cpp-flylint.pclintplus.enable": false,
+        "c-cpp-flylint.flexelint.enable": false,
+        "c-cpp-flylint.clang.enable": false,
+        "C_Cpp.clang_format_path": "/usr/bin/clang-format",
+        "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+        "C_Cpp.default.enableConfigurationSquiggles": true,
+        "[cpp]": {
+          "editor.defaultFormatter": "ms-vscode.cpptools"
+        },
+        "[dockerfile]": {
+          "editor.defaultFormatter": "ms-azuretools.vscode-docker"
+        },
+        "[jsonc]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "files.insertFinalNewline": true
+      },
+      "extensions": [
+        "oderwat.indent-rainbow",
+        "ms-vscode.cpptools-extension-pack",
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools",
+        "jbenden.c-cpp-flylint",
+        "esbenp.prettier-vscode",
+        "donjayamanne.githistory"
+      ]
     }
+  }
 }
