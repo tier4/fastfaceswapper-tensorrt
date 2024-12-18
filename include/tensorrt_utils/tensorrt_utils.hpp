@@ -79,7 +79,7 @@ absl::StatusOr<std::string> dataTypeToString(const nvinfer1::DataType dataType) 
 }
 
 // Function to get the size in bytes of nvinfer1::DataType
-absl::StatusOr<std::size_t> dataTypeToSize(const nvinfer1::DataType dataType) {
+absl::StatusOr<float> dataTypeToBytes(const nvinfer1::DataType dataType) {
   switch (dataType) {
     case nvinfer1::DataType::kFLOAT:
       return 4;
@@ -98,13 +98,14 @@ absl::StatusOr<std::size_t> dataTypeToSize(const nvinfer1::DataType dataType) {
     case nvinfer1::DataType::kUINT8:
       return 1;
     case nvinfer1::DataType::kINT4:
-      return 1;
+      return 0.5;
     case nvinfer1::DataType::kBOOL:
-      return 1;
+      return 0.125;
   }
   return absl::InvalidArgumentError("Unknown data type");
 }
 
+// Function to read engine file and return its content as a vector of bytes
 absl::StatusOr<std::vector<std::uint8_t>> readEngineFile(const std::filesystem::path& enginePath) {
   std::ifstream file(enginePath, std::ios::binary);
   if (!file) {
@@ -122,6 +123,7 @@ absl::StatusOr<std::vector<std::uint8_t>> readEngineFile(const std::filesystem::
   return engineData;
 }
 
+// Function to get the profile batch sizes (min, opt, max) for a given profile index
 absl::StatusOr<std::tuple<std::int32_t, std::int32_t, std::int32_t>> getProfileBatchSizes(
     nvinfer1::ICudaEngine* engine, std::int32_t profileIndex) {
   std::int32_t minBs = -1, optBs = -1, maxBs = -1;
@@ -134,10 +136,18 @@ absl::StatusOr<std::tuple<std::int32_t, std::int32_t, std::int32_t>> getProfileB
           engine->getProfileShape(tensorName, profileIndex, nvinfer1::OptProfileSelector::kOPT);
       const auto maxDims =
           engine->getProfileShape(tensorName, profileIndex, nvinfer1::OptProfileSelector::kMAX);
-      minBs = minDims.d[0];
-      optBs = optDims.d[0];
-      maxBs = maxDims.d[0];
-      break;
+      if (minBs == -1) {
+        minBs = minDims.d[0];
+      }
+      if (optBs == -1) {
+        optBs = optDims.d[0];
+      }
+      if (maxBs == -1) {
+        maxBs = maxDims.d[0];
+      }
+      if (minBs != minDims.d[0] || optBs != optDims.d[0] || maxBs != maxDims.d[0]) {
+        return absl::InternalError("Profile batch sizes are not consistent");
+      }
     }
   }
   if (minBs == -1 || optBs == -1 || maxBs == -1) {
@@ -146,16 +156,60 @@ absl::StatusOr<std::tuple<std::int32_t, std::int32_t, std::int32_t>> getProfileB
   return std::make_tuple(minBs, optBs, maxBs);
 }
 
-absl::StatusOr<std::size_t> getIOTensorFrameSize(nvinfer1::ICudaEngine* engine,
-                                                 std::int32_t index) {
-  const auto tensorName = engine->getIOTensorName(index);
+// Function to get the size in bytes of a tensor frame for a given tensor index
+absl::StatusOr<std::size_t> getIOTensorFrameBytes(nvinfer1::ICudaEngine* engine,
+                                                  std::int32_t index) {
+  if (index < 0 || index >= engine->getNbIOTensors()) {
+    return absl::InvalidArgumentError("Invalid tensor index");
+  }
+  const char* tensorName = engine->getIOTensorName(index);
   auto dims = engine->getTensorShape(tensorName);
   auto dtype = engine->getTensorDataType(tensorName);
-  const auto elemSizeOr = dataTypeToSize(dtype);
+  const auto elemSizeOr = dataTypeToBytes(dtype);
   if (!elemSizeOr.ok()) {
     return absl::InternalError(elemSizeOr.status().message());
   }
-  return std::accumulate(dims.d + 1, dims.d + dims.nbDims, elemSizeOr.value(), std::multiplies<>());
+  std::size_t size = 1;
+  for (std::int32_t i = 1; i < dims.nbDims; ++i) {
+    size *= dims.d[i];
+  }
+  size = static_cast<std::size_t>(size * elemSizeOr.value());
+  return size;
+}
+
+// Function to convert IO tensor name to IO tensor index
+absl::StatusOr<std::int32_t> getIOTensorIndex(nvinfer1::ICudaEngine* engine,
+                                              const char* tensorName) {
+  for (std::int32_t i = 0; i < engine->getNbIOTensors(); ++i) {
+    if (std::strcmp(engine->getIOTensorName(i), tensorName) == 0) {
+      return i;
+    }
+  }
+  return absl::NotFoundError("Tensor " + std::string(tensorName) + " seems to be not an io tensor");
+}
+
+// Function to get the names of all input tensors
+std::vector<const char*> getInputTensorNames(nvinfer1::ICudaEngine* engine) {
+  std::vector<const char*> inputTensorNames;
+  for (std::int32_t i = 0; i < engine->getNbIOTensors(); ++i) {
+    const auto tensorName = engine->getIOTensorName(i);
+    if (engine->getTensorIOMode(tensorName) == nvinfer1::TensorIOMode::kINPUT) {
+      inputTensorNames.push_back(tensorName);
+    }
+  }
+  return inputTensorNames;
+}
+
+// Function to get the names of all output tensors
+std::vector<const char*> getOutputTensorNames(nvinfer1::ICudaEngine* engine) {
+  std::vector<const char*> outputTensorNames;
+  for (std::int32_t i = 0; i < engine->getNbIOTensors(); ++i) {
+    const auto tensorName = engine->getIOTensorName(i);
+    if (engine->getTensorIOMode(tensorName) == nvinfer1::TensorIOMode::kOUTPUT) {
+      outputTensorNames.push_back(tensorName);
+    }
+  }
+  return outputTensorNames;
 }
 
 // Function to convert nvinfer1::Dims to a string
