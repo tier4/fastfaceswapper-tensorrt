@@ -7,7 +7,9 @@
 #include <cuda_utils/stream_unique_ptr.hpp>
 #include <filesystem>
 #include <iostream>
+#include <numeric>
 #include <tensorrt_utils/tensorrt_utils.hpp>
+#include <unordered_map>
 
 namespace tensorrt_utils {
 
@@ -62,6 +64,85 @@ class InferenceEngine {
     if (!status.ok()) {
       throw std::runtime_error(std::string(status.message()));
     }
+  }
+
+  absl::StatusOr<std::unordered_map<std::string, std::vector<std::uint8_t>>> infer(
+      const std::unordered_map<std::string, std::vector<std::uint8_t>>& inputs) {
+    // Set input tensors
+    std::int32_t bs = -1;
+    for (std::int32_t i = 0; i < engine_->getNbIOTensors(); ++i) {
+      const auto tensorName = engine_->getIOTensorName(i);
+      if (engine_->getTensorIOMode(tensorName) == nvinfer1::TensorIOMode::kINPUT) {
+        const auto tensorNameStr = std::string(tensorName);
+        if (inputs.find(tensorNameStr) == inputs.end()) {
+          return absl::InvalidArgumentError(
+              absl::StrFormat("Missing input tensor: %s", tensorNameStr));
+        }
+        auto data = inputs.at(tensorNameStr);
+        auto dims = engine_->getTensorShape(tensorName);
+        auto dtype = engine_->getTensorDataType(tensorName);
+        const auto elemSizeOr = dataTypeToSize(dtype);
+        if (!elemSizeOr.ok()) {
+          return absl::InternalError(elemSizeOr.status().message());
+        }
+        const auto frameSize = std::accumulate(dims.d + 1, dims.d + dims.nbDims, elemSizeOr.value(),
+                                               std::multiplies<>());
+        if (data.size() % frameSize != 0) {
+          return absl::InvalidArgumentError(
+              absl::StrFormat("Invalid input size for tensor: %s, expected multiple of %d, got: %d",
+                              tensorName, frameSize, data.size()));
+        }
+        if (bs == -1) {
+          bs = data.size() / frameSize;
+        }
+        if (static_cast<std::size_t>(bs) != data.size() / frameSize) {
+          return absl::InvalidArgumentError(
+              absl::StrFormat("Invalid batch size for tensor: %s, expected: %d, got: %d",
+                              tensorName, bs, data.size() / frameSize));
+        }
+        if (data.size() > frameSize * maxBs_) {
+          return absl::InvalidArgumentError(
+              absl::StrFormat("Invalid input size for tensor: %s, expected <= %d, got: %d",
+                              tensorName, frameSize * maxBs_, data.size()));
+        }
+        std::copy(data.begin(), data.end(), hbuffs_.at(i).get());
+        CHECK_CUDA_ERROR(cudaMemcpyAsync(dbuffs_.at(i).get(), hbuffs_.at(i).get(), data.size(),
+                                         cudaMemcpyHostToDevice, *stream_));
+      }
+    }
+    // Execute inference
+    context_->enqueueV3(*stream_);
+
+    // Device to host copy for output tensors
+    std::unordered_map<std::string, std::vector<std::uint8_t>> outputs;
+    for (std::int32_t i = 0; i < engine_->getNbIOTensors(); ++i) {
+      const auto tensorName = engine_->getIOTensorName(i);
+      if (engine_->getTensorIOMode(tensorName) == nvinfer1::TensorIOMode::kOUTPUT) {
+        const auto tensorNameStr = std::string(tensorName);
+        auto dims = engine_->getTensorShape(tensorName);
+        auto dtype = engine_->getTensorDataType(tensorName);
+        const auto elemSizeOr = dataTypeToSize(dtype);
+        if (!elemSizeOr.ok()) {
+          return absl::InternalError(elemSizeOr.status().message());
+        }
+        const auto frameSize = std::accumulate(dims.d + 1, dims.d + dims.nbDims, elemSizeOr.value(),
+                                               std::multiplies<>());
+        CHECK_CUDA_ERROR(cudaMemcpyAsync(hbuffs_.at(i).get(), dbuffs_.at(i).get(), frameSize * bs,
+                                         cudaMemcpyDeviceToHost, *stream_));
+        outputs[tensorNameStr].resize(frameSize * bs);
+      }
+    }
+    cudaStreamSynchronize(*stream_);
+
+    for (std::int32_t i = 0; i < engine_->getNbIOTensors(); ++i) {
+      const auto tensorName = engine_->getIOTensorName(i);
+      if (engine_->getTensorIOMode(tensorName) == nvinfer1::TensorIOMode::kOUTPUT) {
+        const auto tensorNameStr = std::string(tensorName);
+        std::copy(hbuffs_.at(i).get(), hbuffs_.at(i).get() + outputs[tensorNameStr].size(),
+                  outputs[tensorNameStr].begin());
+      }
+    }
+    return outputs;
   }
 
  private:
