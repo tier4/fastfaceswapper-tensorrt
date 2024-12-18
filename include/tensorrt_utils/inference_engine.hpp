@@ -68,9 +68,12 @@ class InferenceEngine {
 
   // Perform inference on the input data and return the output data
   absl::StatusOr<std::unordered_map<std::string, std::vector<std::uint8_t>>> infer(
-      const std::unordered_map<std::string, std::vector<std::uint8_t>>& inputs) {
+      const std::unordered_map<std::string, std::vector<std::uint8_t>>& inputs, std::int32_t bs) {
+    if (bs <= 0 || bs > maxBs_) {
+      return absl::InvalidArgumentError(
+          absl::StrFormat("Invalid batch size: %d, min: %d, max: %d", bs, minBs_, maxBs_));
+    }
     // Set input tensors
-    std::int32_t bs = -1;
     for (const auto& tensorName : getInputTensorNames(engine_.get())) {
       const auto tensorNameStr = std::string(tensorName);
       if (inputs.find(tensorNameStr) == inputs.end()) {
@@ -87,28 +90,20 @@ class InferenceEngine {
         return absl::InternalError(frameSizeOr.status().message());
       }
       const auto frameSize = frameSizeOr.value();
-      if (data.size() % frameSize != 0) {
+      const auto totalSize = frameSize * bs;
+      if (data.size() < totalSize) {
         return absl::InvalidArgumentError(
-            absl::StrFormat("Invalid input size for tensor: %s, expected multiple of %d, got: %d",
-                            tensorName, frameSize, data.size()));
-      }
-      if (bs == -1) {
-        bs = data.size() / frameSize;
-      }
-      if (static_cast<std::size_t>(bs) != data.size() / frameSize) {
-        return absl::InvalidArgumentError(
-            absl::StrFormat("Invalid batch size for tensor: %s, expected: %d, got: %d", tensorName,
-                            bs, data.size() / frameSize));
-      }
-      if (data.size() > frameSize * maxBs_) {
-        return absl::InvalidArgumentError(
-            absl::StrFormat("Invalid input size for tensor: %s, expected <= %d, got: %d",
-                            tensorName, frameSize * maxBs_, data.size()));
+            absl::StrFormat("Insufficient input data size for tensor: %s. Expected at least %d "
+                            "bytes, but got only %d bytes.",
+                            tensorNameStr, totalSize, data.size()));
       }
       // Copy input data from host to device
-      std::copy(data.begin(), data.end(), hbuffs_[tensorNameStr].get());
+      std::copy(data.begin(), data.begin() + totalSize, hbuffs_[tensorNameStr].get());
       CHECK_CUDA_ERROR(cudaMemcpyAsync(dbuffs_[tensorNameStr].get(), hbuffs_[tensorNameStr].get(),
-                                       data.size(), cudaMemcpyHostToDevice, *stream_));
+                                       totalSize, cudaMemcpyHostToDevice, *stream_));
+    }
+    if (!setBs(bs).ok()) {
+      return absl::InternalError("Failed to set batch size to " + std::to_string(bs));
     }
 
     // Execute inference
@@ -127,9 +122,10 @@ class InferenceEngine {
         return absl::InternalError(frameSizeOr.status().message());
       }
       const auto frameSize = frameSizeOr.value();
+      const auto totalSize = frameSize * bs;
       CHECK_CUDA_ERROR(cudaMemcpyAsync(hbuffs_[tensorNameStr].get(), dbuffs_[tensorNameStr].get(),
-                                       frameSize * bs, cudaMemcpyDeviceToHost, *stream_));
-      outputs[tensorNameStr].resize(frameSize * bs);
+                                       totalSize, cudaMemcpyDeviceToHost, *stream_));
+      outputs[tensorNameStr].resize(totalSize);
     }
     cudaStreamSynchronize(*stream_);
 
