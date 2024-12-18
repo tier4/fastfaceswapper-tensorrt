@@ -26,6 +26,19 @@
 
 namespace tensorrt_utils {
 
+// Function to check if nvinfer1::Dims matches the expected shape
+bool checkDims(const nvinfer1::Dims& dims, const std::vector<std::int64_t>& expected) {
+  if (dims.nbDims != static_cast<std::int32_t>(expected.size())) {
+    return false;
+  }
+  for (int i = 0; i < dims.nbDims; ++i) {
+    if (expected[i] != -1 && dims.d[i] != expected[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Custom Logger class
 class Logger : public nvinfer1::ILogger {
  public:

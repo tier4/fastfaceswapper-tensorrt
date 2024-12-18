@@ -67,33 +67,29 @@ class FastFaceSwapper {
     const auto conditionDims = trtEngine->getTensorShape(FFSWP_TENSORNAME_CONDITION);
     const auto maskDims = trtEngine->getTensorShape(FFSWP_TENSORNAME_MASK);
     const auto inpaintedDims = trtEngine->getTensorShape(FFSWP_TENSORNAME_INPAINTED);
-
-    // Ensure tensors are 4D
-    if (conditionDims.nbDims != 4 || maskDims.nbDims != 4 || inpaintedDims.nbDims != 4) {
-      throw std::runtime_error("All io tensors must be 4D, but got wrong dimensions.");
+    if (conditionDims.nbDims != 4) {
+      throw std::runtime_error(absl::StrFormat("Invalid number of dimensions for %s tensor: %d.",
+                                               FFSWP_TENSORNAME_CONDITION, conditionDims.nbDims));
     }
-
-    // Ensure mask channel size is 1
-    if (maskDims.d[1] != 1) {
-      throw std::runtime_error(
-          absl::StrFormat("%s tensor must have only 1 channel.", FFSWP_TENSORNAME_MASK));
-    }
-
-    // Ensure condition channel size is 3
-    if (conditionDims.d[1] != 3) {
-      throw std::runtime_error(
-          absl::StrFormat("%s tensor must have 3 channels.", FFSWP_TENSORNAME_CONDITION));
-    }
-
-    // Validate tensor dimensions
     const auto imgH = conditionDims.d[2];
     const auto imgW = conditionDims.d[3];
-    if (maskDims.d[2] != imgH || maskDims.d[3] != imgW || inpaintedDims.d[2] != imgH ||
-        inpaintedDims.d[3] != imgW) {
-      throw std::runtime_error(absl::StrFormat(
-          "All io tensors must have the same 2d spatial dimensions (%dx%d).", imgH, imgW));
-    }
 
+    // Check channel sizes of io tensors
+    if (!tensorrt_utils::checkDims(conditionDims, {-1, 3, imgH, imgW})) {
+      throw std::runtime_error(absl::StrFormat("Invalid shape for %s tensor: %s.",
+                                               FFSWP_TENSORNAME_CONDITION,
+                                               tensorrt_utils::dimsToString(conditionDims)));
+    }
+    if (!tensorrt_utils::checkDims(maskDims, {-1, 1, imgH, imgW})) {
+      throw std::runtime_error(absl::StrFormat("Invalid shape for %s tensor: %s.",
+                                               FFSWP_TENSORNAME_MASK,
+                                               tensorrt_utils::dimsToString(maskDims)));
+    }
+    if (!tensorrt_utils::checkDims(inpaintedDims, {-1, 3, imgH, imgW})) {
+      throw std::runtime_error(absl::StrFormat("Invalid shape for %s tensor: %s.",
+                                               FFSWP_TENSORNAME_INPAINTED,
+                                               tensorrt_utils::dimsToString(inpaintedDims)));
+    }
     // Set image dimensions
     imgH_ = imgH;
     imgW_ = imgW;
@@ -108,9 +104,9 @@ class FastFaceSwapper {
 
  private:
   std::unique_ptr<tensorrt_utils::InferenceEngine> inferEngine_;  // Inference engine instance
-  std::int32_t imgH_;                                             // Image height
-  std::int32_t imgW_;                                             // Image width
-  std::int32_t imgC_;                                             // Number of image channels
+  std::int64_t imgH_;                                             // Image height
+  std::int64_t imgW_;                                             // Image width
+  std::int64_t imgC_;                                             // Number of image channels
 };
 
 }  // namespace ffswp
