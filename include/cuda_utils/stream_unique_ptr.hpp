@@ -17,8 +17,8 @@
 // https://creativecommons.org/publicdomain/zero/1.0/deed.en
 // borrowed from https://proc-cpuinfo.fixstars.com/2019/02/cuda_smart_pointer/
 
-#ifndef CUDA_UTILS__STREAM_UNIQUE_PTR_HPP_
-#define CUDA_UTILS__STREAM_UNIQUE_PTR_HPP_
+#ifndef _CUDA_UTILS__STREAM_UNIQUE_PTR_HPP_
+#define _CUDA_UTILS__STREAM_UNIQUE_PTR_HPP_
 
 #include <cuda_runtime_api.h>
 
@@ -45,4 +45,4 @@ inline StreamUniquePtr makeCudaStream(const uint32_t flags = cudaStreamDefault) 
 }
 }  // namespace cuda_utils
 
-#endif  // CUDA_UTILS__STREAM_UNIQUE_PTR_HPP_
+#endif  // _CUDA_UTILS__STREAM_UNIQUE_PTR_HPP_

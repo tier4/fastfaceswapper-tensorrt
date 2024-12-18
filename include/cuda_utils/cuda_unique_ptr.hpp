@@ -17,8 +17,8 @@
 // https://creativecommons.org/publicdomain/zero/1.0/deed.en
 // borrowed from https://proc-cpuinfo.fixstars.com/2019/02/cuda_smart_pointer/
 
-#ifndef CUDA_UTILS__CUDA_UNIQUE_PTR_HPP_
-#define CUDA_UTILS__CUDA_UNIQUE_PTR_HPP_
+#ifndef _CUDA_UTILS__CUDA_UNIQUE_PTR_HPP_
+#define _CUDA_UTILS__CUDA_UNIQUE_PTR_HPP_
 
 #include <cuda_utils/cuda_check_error.hpp>
 #include <memory>
@@ -72,4 +72,4 @@ CudaUniquePtrHost<T> make_unique_host(unsigned int flag = cudaHostAllocDefault) 
 }
 }  // namespace cuda_utils
 
-#endif  // CUDA_UTILS__CUDA_UNIQUE_PTR_HPP_
+#endif  // _CUDA_UTILS__CUDA_UNIQUE_PTR_HPP_

@@ -17,8 +17,8 @@
 // https://creativecommons.org/publicdomain/zero/1.0/deed.en
 // borrowed from https://proc-cpuinfo.fixstars.com/2019/02/cuda_smart_pointer/
 
-#ifndef CUDA_UTILS__CUDA_CHECK_ERROR_HPP_
-#define CUDA_UTILS__CUDA_CHECK_ERROR_HPP_
+#ifndef _CUDA_UTILS__CUDA_CHECK_ERROR_HPP_
+#define _CUDA_UTILS__CUDA_CHECK_ERROR_HPP_
 #include <cuda_runtime_api.h>
 
 #include <sstream>
@@ -38,4 +38,4 @@ void cuda_check_error(const ::cudaError_t e, F &&f, N &&n) {
 
 #define CHECK_CUDA_ERROR(e) (cuda_utils::cuda_check_error(e, __FILE__, __LINE__))
 
-#endif  // CUDA_UTILS__CUDA_CHECK_ERROR_HPP_
+#endif  // _CUDA_UTILS__CUDA_CHECK_ERROR_HPP_

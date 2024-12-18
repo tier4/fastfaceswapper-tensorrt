@@ -1,5 +1,19 @@
-#ifndef __TENSORRT_UTILS__TENSORRT_UTILS_HPP__
-#define __TENSORRT_UTILS__TENSORRT_UTILS_HPP__
+// Copyright 2024 TIER IV, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef _TENSORRT_UTILS__TENSORRT_UTILS_HPP_
+#define _TENSORRT_UTILS__TENSORRT_UTILS_HPP_
 
 #include <NvInfer.h>
 #include <absl/log/log.h>
@@ -18,12 +32,12 @@ class Logger : public nvinfer1::ILogger {
   // Constructor to specify the log level
   explicit Logger(
       const nvinfer1::ILogger::Severity severity = nvinfer1::ILogger::Severity::kWARNING)
-      : mSeverity(severity) {}
+      : severity_(severity) {}
 
   // The log function is overridden to handle logging messages based on severity
   // Note: Higher severity levels are assigned lower integer values
   void log(const Severity severity, const char* msg) noexcept override {
-    if (severity <= mSeverity) {
+    if (severity <= severity_) {
       switch (severity) {
         case Severity::kINTERNAL_ERROR:
           LOG(ERROR) << msg;
@@ -48,7 +62,7 @@ class Logger : public nvinfer1::ILogger {
   }
 
  private:
-  Severity mSeverity;  // Configured minimum severity level
+  Severity severity_;  // Configured minimum severity level
 };
 
 // Function to get the size in bytes of nvinfer1::DataType
