@@ -80,6 +80,48 @@ class InferenceEngine {
     }
   }
 
+  // Getter for minimum batch size
+  std::int32_t getMinBatchSize() const { return minBs_; }
+
+  // Getter for maximum batch size
+  std::int32_t getMaxBatchSize() const { return maxBs_; }
+
+  // Getter for optimized batch size
+  std::int32_t getOptBathSize() const { return optBs_; }
+
+  // Getter for input tensor shapes
+  std::unordered_map<std::string, nvinfer1::Dims> getInputShapes(void) const {
+    std::unordered_map<std::string, nvinfer1::Dims> inputShapes;
+    for (const auto& tensorName : getInputTensorNames(engine_.get())) {
+      inputShapes[tensorName] = engine_->getTensorShape(tensorName);
+    }
+    return inputShapes;
+  }
+
+  // Getter for output tensor shapes
+  std::unordered_map<std::string, nvinfer1::Dims> getOutputShapes(void) const {
+    std::unordered_map<std::string, nvinfer1::Dims> outputShapes;
+    for (const auto& tensorName : getOutputTensorNames(engine_.get())) {
+      outputShapes[tensorName] = engine_->getTensorShape(tensorName);
+    }
+    return outputShapes;
+  }
+
+  // Getter for input tensor names
+  std::vector<std::string> getInputNames() const {
+    auto names = getInputTensorNames(engine_.get());
+    return std::vector<std::string>(names.begin(), names.end());
+  }
+
+  // Getter for output tensor names
+  std::vector<std::string> getOutputNames() const {
+    auto names = getOutputTensorNames(engine_.get());
+    return std::vector<std::string>(names.begin(), names.end());
+  }
+
+  // Getter for the TensorRT engine
+  nvinfer1::ICudaEngine* getEngine() const { return engine_.get(); }
+
   // Perform inference on the input data and return the output data
   absl::StatusOr<std::unordered_map<std::string, std::vector<std::uint8_t>>> infer(
       const std::unordered_map<std::string, std::vector<std::uint8_t>>& inputs, std::int32_t bs) {

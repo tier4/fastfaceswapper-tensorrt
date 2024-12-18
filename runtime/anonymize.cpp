@@ -55,7 +55,10 @@ int main(int argc, char** argv) {
   tensorrt_utils::Logger logger(nvinfer1::ILogger::Severity::kINFO);
 
   // Create InferenceEngine object
-  tensorrt_utils::InferenceEngine engine(parsed.engine_path, logger);
+  ffswp::FastFaceSwapper faceSwapper(parsed.engine_path, logger);
+  auto [imgH, imgW] = faceSwapper.getImgSize();
+  auto imgC = faceSwapper.getImgChannels();
+  LOG(INFO) << "Image size: " << imgH << "x" << imgW << "x" << imgC;
 
   return 0;
 }
