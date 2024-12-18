@@ -75,17 +75,17 @@ class FastFaceSwapper {
     const auto imgW = conditionDims.d[3];
 
     // Check channel sizes of io tensors
-    if (!tensorrt_utils::checkDims(conditionDims, {-1, 3, imgH, imgW})) {
+    if (!tensorrt_utils::expectDims(conditionDims, {-1, 3, imgH, imgW})) {
       throw std::runtime_error(absl::StrFormat("Invalid shape for %s tensor: %s.",
                                                FFSWP_TENSORNAME_CONDITION,
                                                tensorrt_utils::dimsToString(conditionDims)));
     }
-    if (!tensorrt_utils::checkDims(maskDims, {-1, 1, imgH, imgW})) {
+    if (!tensorrt_utils::expectDims(maskDims, {-1, 1, imgH, imgW})) {
       throw std::runtime_error(absl::StrFormat("Invalid shape for %s tensor: %s.",
                                                FFSWP_TENSORNAME_MASK,
                                                tensorrt_utils::dimsToString(maskDims)));
     }
-    if (!tensorrt_utils::checkDims(inpaintedDims, {-1, 3, imgH, imgW})) {
+    if (!tensorrt_utils::expectDims(inpaintedDims, {-1, 3, imgH, imgW})) {
       throw std::runtime_error(absl::StrFormat("Invalid shape for %s tensor: %s.",
                                                FFSWP_TENSORNAME_INPAINTED,
                                                tensorrt_utils::dimsToString(inpaintedDims)));
