@@ -69,18 +69,25 @@ class InferenceEngine {
   // Perform inference on the input data and return the output data
   absl::StatusOr<std::unordered_map<std::string, std::vector<std::uint8_t>>> infer(
       const std::unordered_map<std::string, std::vector<std::uint8_t>>& inputs, std::int32_t bs) {
+    // Validate batch size
     if (bs <= 0 || bs > maxBs_) {
       return absl::InvalidArgumentError(
           absl::StrFormat("Invalid batch size: %d, min: %d, max: %d", bs, minBs_, maxBs_));
     }
+
     // Set input tensors
     for (const auto& tensorName : getInputTensorNames(engine_.get())) {
       const auto tensorNameStr = std::string(tensorName);
+
+      // Check if input data for the tensor is provided
       if (inputs.find(tensorNameStr) == inputs.end()) {
         return absl::InvalidArgumentError(
             absl::StrFormat("Missing data for input tensor %s", tensorNameStr));
       }
+
       auto data = inputs.at(tensorNameStr);
+
+      // Get tensor index and frame size
       const auto indexOr = getIOTensorIndex(engine_.get(), tensorName);
       if (!indexOr.ok()) {
         return absl::InternalError(indexOr.status().message());
@@ -91,17 +98,22 @@ class InferenceEngine {
       }
       const auto frameSize = frameSizeOr.value();
       const auto totalSize = frameSize * bs;
+
+      // Validate input data size
       if (data.size() < totalSize) {
         return absl::InvalidArgumentError(
             absl::StrFormat("Insufficient input data size for tensor: %s. Expected at least %d "
                             "bytes, but got only %d bytes.",
                             tensorNameStr, totalSize, data.size()));
       }
+
       // Copy input data from host to device
       std::copy(data.begin(), data.begin() + totalSize, hbuffs_[tensorNameStr].get());
       CHECK_CUDA_ERROR(cudaMemcpyAsync(dbuffs_[tensorNameStr].get(), hbuffs_[tensorNameStr].get(),
                                        totalSize, cudaMemcpyHostToDevice, *stream_));
     }
+
+    // Set batch size
     if (!setBs(bs).ok()) {
       return absl::InternalError("Failed to set batch size to " + std::to_string(bs));
     }
@@ -113,6 +125,8 @@ class InferenceEngine {
     std::unordered_map<std::string, std::vector<std::uint8_t>> outputs;
     for (const auto& tensorName : getOutputTensorNames(engine_.get())) {
       const auto tensorNameStr = std::string(tensorName);
+
+      // Get tensor index and frame size
       const auto indexOr = getIOTensorIndex(engine_.get(), tensorName);
       if (!indexOr.ok()) {
         return absl::InternalError(indexOr.status().message());
@@ -123,10 +137,14 @@ class InferenceEngine {
       }
       const auto frameSize = frameSizeOr.value();
       const auto totalSize = frameSize * bs;
+
+      // Copy output data from device to host
       CHECK_CUDA_ERROR(cudaMemcpyAsync(hbuffs_[tensorNameStr].get(), dbuffs_[tensorNameStr].get(),
                                        totalSize, cudaMemcpyDeviceToHost, *stream_));
       outputs[tensorNameStr].resize(totalSize);
     }
+
+    // Synchronize CUDA stream
     cudaStreamSynchronize(*stream_);
 
     // Copy output data from host to output map
@@ -136,6 +154,7 @@ class InferenceEngine {
                 hbuffs_[tensorNameStr].get() + outputs[tensorNameStr].size(),
                 outputs[tensorNameStr].begin());
     }
+
     return outputs;
   }
 
@@ -185,28 +204,22 @@ class InferenceEngine {
     for (int i = 0; i < nbBindings; ++i) {
       const auto tensorName = engine_->getIOTensorName(i);
       const auto tensorNameStr = std::string(tensorName);
-      const auto dims = engine_->getTensorShape(tensorName);
-      const auto dtype = engine_->getTensorDataType(tensorName);
-      const bool isInput = engine_->getTensorIOMode(tensorName) == nvinfer1::TensorIOMode::kINPUT;
-      size_t size = maxBs_;
-      for (std::int32_t j = 1; j < dims.nbDims; ++j) {
-        size *= dims.d[j];
+      const auto isInput = engine_->getTensorIOMode(tensorName) == nvinfer1::TensorIOMode::kINPUT;
+      const auto frameSizeOr = getIOTensorFrameBytes(engine_.get(), i);
+      if (!frameSizeOr.ok()) {
+        return absl::InternalError(frameSizeOr.status().message());
       }
-      const auto elemSizeOr = dataTypeToBytes(dtype);
-      if (!elemSizeOr.ok()) {
-        return absl::InternalError(elemSizeOr.status().message());
-      }
-      std::size_t bindingSize =
-          static_cast<std::size_t>(size * elemSizeOr.value());  // Assuming float data type
+      const auto frameSize = frameSizeOr.value();
+      std::size_t totalSize = frameSize * maxBs_;
       logger_->log(nvinfer1::ILogger::Severity::kINFO,
                    absl::StrFormat("Allocating memory for %s tensor: name=%s (%s), size=%d",
                                    isInput ? "input" : "output", tensorName,
-                                   engine_->getTensorFormatDesc(tensorName), bindingSize)
+                                   engine_->getTensorFormatDesc(tensorName), totalSize)
                        .c_str());
 
-      dbuffs_[tensorNameStr] = cuda_utils::make_unique<std::uint8_t[]>(bindingSize);
+      dbuffs_[tensorNameStr] = cuda_utils::make_unique<std::uint8_t[]>(totalSize);
       hbuffs_[tensorNameStr] =
-          cuda_utils::make_unique_host<std::uint8_t[]>(bindingSize, cudaHostAllocPortable);
+          cuda_utils::make_unique_host<std::uint8_t[]>(totalSize, cudaHostAllocPortable);
       if (!context_->setTensorAddress(tensorName, dbuffs_[tensorNameStr].get())) {
         return absl::InternalError(
             absl::StrFormat("Failed to set tensor address for tensor: %s", tensorName));
