@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <numeric>
 
 namespace tensorrt_utils {
 
@@ -143,6 +144,18 @@ absl::StatusOr<std::tuple<std::int32_t, std::int32_t, std::int32_t>> getProfileB
     return absl::InternalError("Failed to get profile batch sizes");
   }
   return std::make_tuple(minBs, optBs, maxBs);
+}
+
+absl::StatusOr<std::size_t> getIOTensorFrameSize(nvinfer1::ICudaEngine* engine,
+                                                 std::int32_t index) {
+  const auto tensorName = engine->getIOTensorName(index);
+  auto dims = engine->getTensorShape(tensorName);
+  auto dtype = engine->getTensorDataType(tensorName);
+  const auto elemSizeOr = dataTypeToSize(dtype);
+  if (!elemSizeOr.ok()) {
+    return absl::InternalError(elemSizeOr.status().message());
+  }
+  return std::accumulate(dims.d + 1, dims.d + dims.nbDims, elemSizeOr.value(), std::multiplies<>());
 }
 
 // Function to convert nvinfer1::Dims to a string
