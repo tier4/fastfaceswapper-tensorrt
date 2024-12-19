@@ -27,6 +27,50 @@
 
 namespace tensorrt_utils {
 
+absl::StatusOr<std::vector<std::uint8_t>> toChannelLast(
+    const std::vector<std::uint8_t>& channelFirstData, const std::size_t n, const std::size_t c,
+    const std::size_t h, const std::size_t w) {
+  const auto totalSize = n * c * h * w;
+  if (channelFirstData.size() != totalSize) {
+    return absl::InvalidArgumentError(absl::StrFormat("Invalid data size: expected %d, but got %d",
+                                                      totalSize, channelFirstData.size()));
+  }
+  std::vector<std::uint8_t> channelLastData(n * h * w * c);
+  for (std::size_t ni = 0; ni < n; ++ni) {
+    for (std::size_t hi = 0; hi < h; ++hi) {
+      for (std::size_t wi = 0; wi < w; ++wi) {
+        for (std::size_t ci = 0; ci < c; ++ci) {
+          channelLastData[ni * h * w * c + hi * w * c + wi * c + ci] =
+              channelFirstData[ni * c * h * w + ci * h * w + hi * w + wi];
+        }
+      }
+    }
+  }
+  return channelLastData;
+}
+
+absl::StatusOr<std::vector<std::uint8_t>> toChannelFirst(
+    const std::vector<std::uint8_t>& channelLastData, const std::size_t n, const std::size_t c,
+    const std::size_t h, const std::size_t w) {
+  const auto totalSize = n * c * h * w;
+  if (channelLastData.size() != totalSize) {
+    return absl::InvalidArgumentError(absl::StrFormat("Invalid data size: expected %d, but got %d",
+                                                      totalSize, channelLastData.size()));
+  }
+  std::vector<std::uint8_t> channelFirstData(n * c * h * w);
+  for (std::size_t ni = 0; ni < n; ++ni) {
+    for (std::size_t hi = 0; hi < h; ++hi) {
+      for (std::size_t wi = 0; wi < w; ++wi) {
+        for (std::size_t ci = 0; ci < c; ++ci) {
+          channelFirstData[ni * c * h * w + ci * h * w + hi * w + wi] =
+              channelLastData[ni * h * w * c + hi * w * c + wi * c + ci];
+        }
+      }
+    }
+  }
+  return channelFirstData;
+}
+
 class InferenceEngine {
  public:
   // Constructor for InferenceEngine
@@ -81,13 +125,13 @@ class InferenceEngine {
   }
 
   // Getter for minimum batch size
-  inline std::int32_t getMinBatchSize() const { return minBs_; }
+  inline std::size_t getMinBatchSize() const { return minBs_; }
 
   // Getter for maximum batch size
-  inline std::int32_t getMaxBatchSize() const { return maxBs_; }
+  inline std::size_t getMaxBatchSize() const { return maxBs_; }
 
   // Getter for optimized batch size
-  inline std::int32_t getOptBathSize() const { return optBs_; }
+  inline std::size_t getOptBathSize() const { return optBs_; }
 
   // Getter for input tensor shapes
   std::unordered_map<std::string, nvinfer1::Dims> getInputShapes(void) const {
@@ -124,9 +168,9 @@ class InferenceEngine {
 
   // Perform inference on the input data and return the output data
   absl::StatusOr<std::unordered_map<std::string, std::vector<std::uint8_t>>> infer(
-      const std::unordered_map<std::string, std::vector<std::uint8_t>>& inputs, std::int32_t bs) {
+      const std::unordered_map<std::string, std::vector<std::uint8_t>>& inputs, std::size_t bs) {
     // Validate batch size
-    if (bs <= 0 || bs > maxBs_) {
+    if (bs < minBs_ || bs > maxBs_) {
       return absl::InvalidArgumentError(
           absl::StrFormat("Invalid batch size: %d, min: %d, max: %d", bs, minBs_, maxBs_));
     }
@@ -228,15 +272,15 @@ class InferenceEngine {
   // CUDA stream for asynchronous operations
   cuda_utils::StreamUniquePtr stream_{cuda_utils::makeCudaStream()};
   // Minimum batch size for the engine
-  std::int32_t minBs_;
+  std::size_t minBs_;
   // Maximum batch size for the engine
-  std::int32_t maxBs_;
+  std::size_t maxBs_;
   // Optimum batch size for the engine
-  std::int32_t optBs_;
+  std::size_t optBs_;
 
   // Sets the batch size for the engine
   // Returns an error if the batch size is invalid
-  absl::Status setBs(const std::int32_t bs) {
+  absl::Status setBs(const std::size_t bs) {
     if (bs < minBs_ || bs > maxBs_) {
       return absl::InvalidArgumentError(
           absl::StrFormat("Invalid batch size: %d, min: %d, max: %d", bs, minBs_, maxBs_));
@@ -256,7 +300,7 @@ class InferenceEngine {
   // Returns an error if memory allocation fails
   absl::Status allocateMemory() {
     // Allocate memory for input and output tensors
-    std::int32_t nbBindings = engine_->getNbIOTensors();
+    const auto nbBindings = engine_->getNbIOTensors();
     for (int i = 0; i < nbBindings; ++i) {
       const auto tensorName = engine_->getIOTensorName(i);
       const auto tensorNameStr = std::string(tensorName);

@@ -81,7 +81,7 @@ class Logger : public nvinfer1::ILogger {
 // Function to get the size in bytes of nvinfer1::DataType
 // NOTE: This function returns a float value to support kINT4 and kBOOL data types (0.5, 0.125 bytes
 // respectively)
-absl::StatusOr<float> dataTypeToBytes(const nvinfer1::DataType dataType) {
+absl::StatusOr<double> dataTypeToBytes(const nvinfer1::DataType dataType) {
   switch (dataType) {
     case nvinfer1::DataType::kFLOAT:
       return 4;
@@ -126,9 +126,9 @@ absl::StatusOr<std::vector<std::uint8_t>> readEngineFile(const std::filesystem::
 }
 
 // Function to get the profile batch sizes (min, opt, max) for a given profile index
-absl::StatusOr<std::tuple<std::int32_t, std::int32_t, std::int32_t>> getProfileBatchSizes(
-    nvinfer1::ICudaEngine* engine, std::int32_t profileIndex) {
-  std::int32_t minBs = -1, optBs = -1, maxBs = -1;
+absl::StatusOr<std::tuple<std::size_t, std::size_t, std::size_t>> getProfileBatchSizes(
+    nvinfer1::ICudaEngine* engine, std::size_t profileIndex) {
+  std::int64_t minBs = -1, optBs = -1, maxBs = -1;
   for (std::int32_t i = 0; i < engine->getNbIOTensors(); ++i) {
     const auto tensorName = engine->getIOTensorName(i);
     if (engine->getTensorIOMode(tensorName) == nvinfer1::TensorIOMode::kINPUT) {
@@ -155,13 +155,14 @@ absl::StatusOr<std::tuple<std::int32_t, std::int32_t, std::int32_t>> getProfileB
   if (minBs == -1 || optBs == -1 || maxBs == -1) {
     return absl::InternalError("Failed to get profile batch sizes");
   }
-  return std::make_tuple(minBs, optBs, maxBs);
+  return std::make_tuple(static_cast<std::size_t>(minBs), static_cast<std::size_t>(optBs),
+                         static_cast<std::size_t>(maxBs));
 }
 
 // Function to get the size in bytes of a tensor frame for a given tensor index
 absl::StatusOr<std::size_t> getIOTensorFrameBytes(nvinfer1::ICudaEngine* engine,
-                                                  std::int32_t index) {
-  if (index < 0 || index >= engine->getNbIOTensors()) {
+                                                  std::size_t index) {
+  if (index >= static_cast<std::size_t>(engine->getNbIOTensors())) {
     return absl::InvalidArgumentError("Invalid tensor index");
   }
   const char* tensorName = engine->getIOTensorName(index);
@@ -180,8 +181,8 @@ absl::StatusOr<std::size_t> getIOTensorFrameBytes(nvinfer1::ICudaEngine* engine,
 }
 
 // Function to convert IO tensor name to IO tensor index
-absl::StatusOr<std::int32_t> getIOTensorIndex(nvinfer1::ICudaEngine* engine,
-                                              const char* tensorName) {
+absl::StatusOr<std::size_t> getIOTensorIndex(nvinfer1::ICudaEngine* engine,
+                                             const char* tensorName) {
   for (std::int32_t i = 0; i < engine->getNbIOTensors(); ++i) {
     if (std::strcmp(engine->getIOTensorName(i), tensorName) == 0) {
       return i;

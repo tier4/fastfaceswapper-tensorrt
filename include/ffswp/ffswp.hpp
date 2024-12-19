@@ -27,7 +27,7 @@ namespace ffswp {
 
 // Function to create a mask with the given image size and ROI
 absl::StatusOr<cv::Mat> createMask(const cv::Size& imgSize, const cv::Rect& roi,
-                                   const std::int32_t channels = 1,
+                                   const std::size_t channels = 1,
                                    const cv::Scalar& roiValue = cv::Scalar::all(0),
                                    const cv::Scalar& bgValue = cv::Scalar::all(1.0)) {
   // Create a mask with the given image size and number of channels, initialized to the background
@@ -52,9 +52,9 @@ absl::StatusOr<cv::Mat> createMask(const cv::Size& imgSize, const cv::Rect& roi,
 // Function to create input images for the face swapping model
 absl::StatusOr<std::tuple<cv::Mat, cv::Mat>> createInput(
     const cv::Mat& srcImg, const cv::Rect& roi, const cv::Size& inputSize,
-    const float cropScale = 1.4, const std::int32_t conditionChannels = 3,
+    const double cropScale = 1.4, const std::size_t conditionChannels = 3,
     const std::tuple<float, float>& conditionValueRange = {-1.0, 1.0},
-    const cv::Scalar& conditionROIValue = cv::Scalar::all(0.0), const std::int32_t maskChannels = 1,
+    const cv::Scalar& conditionROIValue = cv::Scalar::all(0.0), const std::size_t maskChannels = 1,
     const cv::Scalar& maskROIValue = cv::Scalar::all(0.0),
     const cv::Scalar& maskBgValue = cv::Scalar::all(1.0)) {
   // Check if the source image is valid
@@ -110,8 +110,14 @@ class FastFaceSwapper {
   // Get 2D image size
   inline cv::Size getImgSize() const { return cv::Size(imgW_, imgH_); }
 
+  // Get image height
+  inline std::size_t getImgH() const { return imgH_; }
+
+  // Get image width
+  inline std::size_t getImgW() const { return imgW_; }
+
   // Get number of image channels
-  inline std::int32_t getImgChannels() const { return imgC_; }
+  inline std::size_t getImgChannels() const { return imgC_; }
 
   // Constructor for FastFaceSwapper class
   // Initializes the inference engine with the provided engine path and logger
@@ -178,10 +184,10 @@ class FastFaceSwapper {
   }
 
   // Swap faces in the source image
-  cv::Mat swap(const cv::Mat& srcImg, const std::vector<cv::Rect>& rois, bool inplace = false) {
+  absl::StatusOr<cv::Mat> swap(const cv::Mat& srcImg, const std::vector<cv::Rect>& rois) {
     const auto maxBs = inferEngine_->getMaxBatchSize();
     for (std::size_t offset = 0; offset < rois.size(); offset += maxBs) {
-      const auto bs = std::min(maxBs, static_cast<std::int32_t>(rois.size() - offset));
+      const auto bs = std::min(maxBs, rois.size() - offset);
       std::vector<cv::Mat> conditions;
       std::vector<cv::Mat> masks;
       for (std::size_t i = 0; i < bs; ++i) {
@@ -199,13 +205,35 @@ class FastFaceSwapper {
       if (conditions.size() == 0 || masks.size() == 0) {  // Skip if no valid input
         continue;
       }
+      const auto bsEffective = conditions.size();
 
       // Create flatten blob
       // NOTE: Convert memory format from NHWC to NCHW
       // Assumes conditions & masks have been already resized and normalized
-      auto batchConditions =
-          cv::dnn::blobFromImages(conditions, 1.0, cv::Size(), cv::Scalar(), true);
-      auto batchMasks = cv::dnn::blobFromImages(masks, 1.0, cv::Size(), cv::Scalar(), true);
+      auto batchConditions = cv_utils::makeContinuous(cv_utils::flatten(
+          cv::dnn::blobFromImages(conditions, 1.0, cv::Size(), cv::Scalar(), true)));
+      auto batchMasks = cv_utils::makeContinuous(
+          cv_utils::flatten(cv::dnn::blobFromImages(masks, 1.0, cv::Size(), cv::Scalar(), true)));
+
+      // Convert to byte data
+      std::vector<std::uint8_t> conditionData(
+          batchConditions.ptr(), batchConditions.ptr() + cv_utils::bytes(batchConditions));
+      std::vector<std::uint8_t> maskData(batchMasks.ptr(),
+                                         batchMasks.ptr() + cv_utils::bytes(batchMasks));
+
+      // Perform inference
+      const auto outputOr = inferEngine_->infer(
+          {{ioNameCondition_, conditionData}, {ioNameMask_, maskData}}, bsEffective);
+      if (!outputOr.ok()) {
+        return absl::Status(
+            absl::StatusCode::kInternal,
+            absl::StrFormat("Failed to perform inference: %s", outputOr.status().message()));
+      }
+
+      // NCHW to NHWC
+      const auto& outputNCHW = outputOr.value().at(ioNameOutput_);
+      const auto outputNHWC =
+          tensorrt_utils::toChannelLast(outputNCHW, bsEffective, imgC_, imgH_, imgW_);
 
       // Set input tensors
       // std::unordered_map<std::string, std::vector<std::uint8_t>> inputs;
@@ -214,11 +242,7 @@ class FastFaceSwapper {
       //   const auto& mask = masks[i];
       //   const auto conditionSize = condition.total() * condition.elemSize();
       //   const auto maskSize = mask.total() * mask.elemSize();
-      //   inputs[ioNameCondition_] = std::vector<std::uint8_t>(conditionSize);
-      //   inputs[ioNameMask_] = std::vector<std::uint8_t>(maskSize);
-      //   std::memcpy(inputs[ioNameCondition_].data(), condition.data, conditionSize);
-      //   std::memcpy(inputs[ioNameMask_].data(), mask.data, maskSize);
-      // }
+      //   inputs[ioNameCo
 
       // // Perform inference
       // const auto outputsOr = inferEngine_->infer(inputs, bs);
@@ -244,9 +268,9 @@ class FastFaceSwapper {
 
  private:
   std::unique_ptr<tensorrt_utils::InferenceEngine> inferEngine_;  // Inference engine instance
-  std::int64_t imgH_;                                             // Image height
-  std::int64_t imgW_;                                             // Image width
-  std::int64_t imgC_;                                             // Number of image channels
+  std::size_t imgH_;                                              // Image height
+  std::size_t imgW_;                                              // Image width
+  std::size_t imgC_;                                              // Number of image channels
   std::string ioNameCondition_;
   std::string ioNameMask_;
   std::string ioNameOutput_;

@@ -44,73 +44,8 @@ inline bool isValidImg(const std::filesystem::path& filePath) {
           !cv::imread(filePath, cv::IMREAD_UNCHANGED).empty());
 }
 
-// Get the 3D shape (h, w, c) of an image
-inline std::tuple<std::uint32_t, std::uint32_t, std::uint32_t> shape(const cv::Mat& img) {
-  return {img.rows, img.cols, img.channels()};
-}
-
-// Alias of shape
-inline std::tuple<std::uint32_t, std::uint32_t, std::uint32_t> shape3d(const cv::Mat& img) {
-  return shape(img);
-}
-
-// Get the 2D shape (h, w) of an image
-inline std::tuple<std::uint32_t, std::uint32_t> shape2d(const cv::Mat& img) {
-  return {img.rows, img.cols};
-}
-
 // Get the total bytes of an image
-inline std::size_t bytes(const cv::Mat& img) { return img.rows * img.cols * img.elemSize(); }
-
-// Get the total elements of an image (elements = pixels * channels)
-inline std::size_t elems(const cv::Mat& img) { return img.rows * img.cols * img.channels(); }
-
-// Get the size of an image element
-inline std::size_t elemBytes(const cv::Mat& img) { return img.elemSize() / img.channels(); }
-
-// Get the total pixels of an image
-inline std::size_t pixels(const cv::Mat& img) { return img.rows * img.cols; }
-
-// Get the size of an image pixel (size of an element * channels)
-inline std::size_t pixelBytes(const cv::Mat& img) { return img.elemSize(); }
-
-// Validate the shape (h, w, c) of an image
-inline bool validateShape(const cv::Mat& img, const uint32_t height, const uint32_t width,
-                          const uint32_t channels) {
-  return !((height != 0 && height != static_cast<std::uint32_t>(img.rows)) ||
-           (width != 0 && width != static_cast<std::uint32_t>(img.cols)) ||
-           (channels != 0 && channels != static_cast<std::uint32_t>(img.channels())));
-}
-
-// Check if `img_a` & `img_b` have the same data type
-inline bool isSameType(const cv::Mat& imgA, const cv::Mat& imgB) {
-  return imgA.depth() == imgB.depth();
-}
-
-// Check if `img_a` & `img_b` have the same number of pixels
-inline bool isSamePixelCount(const cv::Mat& imgA, const cv::Mat& imgB) {
-  return pixels(imgA) == pixels(imgB);
-}
-
-// Check if `img_a` & `img_b` have the same number of elements
-inline bool isSameElemCount(const cv::Mat& imgA, const cv::Mat& imgB) {
-  return elems(imgA) == elems(imgB);
-}
-
-// Check if `img_a` & `img_b` have the same 3D (h, w, c) shape
-inline bool isSameShape(const cv::Mat& imgA, const cv::Mat& imgB) {
-  return shape(imgA) == shape(imgB);
-}
-
-// Alias of isSameShape
-inline bool isSameShape3d(const cv::Mat& imgA, const cv::Mat& imgB) {
-  return shape3d(imgA) == shape3d(imgB);
-}
-
-// Check if `img_a` & `img_b` have the same 2D (h, w) shape
-inline bool isSameShape2d(const cv::Mat& imgA, const cv::Mat& imgB) {
-  return shape2d(imgA) == shape2d(imgB);
-}
+inline std::size_t bytes(const cv::Mat& img) { return img.total() * img.elemSize(); }
 
 // Crop image at the given ROI
 absl::StatusOr<cv::Mat> crop(const cv::Mat& src, const cv::Rect& roi, const bool deepCopy = true,
