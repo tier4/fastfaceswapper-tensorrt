@@ -94,6 +94,7 @@ int main(int argc, char** argv) {
   }
 
   // Iterate over all images in the image directory
+  std::size_t cnt = 0;
   for (const auto& entry : std::filesystem::recursive_directory_iterator(parsed.data_dir)) {
     const auto& imgPath = entry.path();
     if (!cv_utils::isValidImg(imgPath)) {  // Skip non-image files or unreadable images
@@ -132,8 +133,10 @@ int main(int argc, char** argv) {
       LOG(ERROR) << "Failed to save output image to " << outPath;
     } else {
       LOG(INFO) << "Saved output image to " << outPath;
+      cnt++;
     }
   }
+  LOG(INFO) << "Successfully processed " << cnt << " images";
 
   return 0;
 }
