@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
     auto tensor = network->getInput(i);
     auto shape = tensor->getDimensions();
     LOG(INFO) << absl::StrFormat("Input (%s): %s", tensor->getName(),
-                                 tensorrt_utils::dimsToString(shape));
+                                 tensorrt_utils::dimsToStr(shape));
     if (shape.d[0] > 0) {
       shape.d[0] = -1;
       tensor->setDimensions(shape);

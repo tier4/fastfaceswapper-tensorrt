@@ -215,7 +215,7 @@ std::vector<const char*> getOutputTensorNames(nvinfer1::ICudaEngine* engine) {
 }
 
 // Function to convert nvinfer1::Dims to a string
-std::string dimsToString(const nvinfer1::Dims& dims) {
+std::string dimsToStr(const nvinfer1::Dims& dims) {
   std::ostringstream oss;
   oss << "[";
   for (int i = 0; i < dims.nbDims; ++i) {
