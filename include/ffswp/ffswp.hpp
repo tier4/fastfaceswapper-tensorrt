@@ -63,10 +63,10 @@ class FastFaceSwapper {
     }
 
     // Get tensor shapes from the inference engine
-    const auto trtEngine = inferEngine_->getEngine();
-    const auto conditionDims = trtEngine->getTensorShape(FFSWP_TENSORNAME_CONDITION);
-    const auto maskDims = trtEngine->getTensorShape(FFSWP_TENSORNAME_MASK);
-    const auto inpaintedDims = trtEngine->getTensorShape(FFSWP_TENSORNAME_INPAINTED);
+    const auto& trtEngine = inferEngine_->getEngine();
+    const auto conditionDims = trtEngine.getTensorShape(FFSWP_TENSORNAME_CONDITION);
+    const auto maskDims = trtEngine.getTensorShape(FFSWP_TENSORNAME_MASK);
+    const auto inpaintedDims = trtEngine.getTensorShape(FFSWP_TENSORNAME_INPAINTED);
     if (conditionDims.nbDims != 4) {
       throw std::runtime_error(absl::StrFormat("Invalid number of dimensions for %s tensor: %d.",
                                                FFSWP_TENSORNAME_CONDITION, conditionDims.nbDims));

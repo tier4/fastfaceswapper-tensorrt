@@ -120,7 +120,7 @@ class InferenceEngine {
   }
 
   // Getter for the TensorRT engine
-  nvinfer1::ICudaEngine* getEngine() const { return engine_.get(); }
+  const nvinfer1::ICudaEngine& getEngine() const { return *engine_; }
 
   // Perform inference on the input data and return the output data
   absl::StatusOr<std::unordered_map<std::string, std::vector<std::uint8_t>>> infer(
@@ -171,7 +171,7 @@ class InferenceEngine {
 
     // Set batch size
     if (!setBs(bs).ok()) {
-      return absl::InternalError("Failed to set batch size to " + std::to_string(bs));
+      return absl::InternalError(absl::StrFormat("Failed to set batch size to %d", bs));
     }
 
     // Execute inference
