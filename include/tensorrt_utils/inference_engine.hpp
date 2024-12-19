@@ -305,21 +305,28 @@ class InferenceEngine {
       const auto tensorName = engine_->getIOTensorName(i);
       const auto tensorNameStr = std::string(tensorName);
       const auto isInput = engine_->getTensorIOMode(tensorName) == nvinfer1::TensorIOMode::kINPUT;
+
+      // Get the frame size for the tensor
       const auto frameSizeOr = getIOTensorFrameBytes(engine_.get(), i);
       if (!frameSizeOr.ok()) {
         return absl::InternalError(frameSizeOr.status().message());
       }
       const auto frameSize = frameSizeOr.value();
-      std::size_t totalSize = frameSize * maxBs_;
+      const std::size_t totalSize = frameSize * maxBs_;
+
+      // Log the memory allocation details
       logger_->log(nvinfer1::ILogger::Severity::kINFO,
                    absl::StrFormat("Allocating memory for %s tensor: name=%s (%s), size=%d",
                                    isInput ? "input" : "output", tensorName,
                                    engine_->getTensorFormatDesc(tensorName), totalSize)
                        .c_str());
 
+      // Allocate device and host memory for the tensor
       dbuffs_[tensorNameStr] = cuda_utils::make_unique<std::uint8_t[]>(totalSize);
       hbuffs_[tensorNameStr] =
           cuda_utils::make_unique_host<std::uint8_t[]>(totalSize, cudaHostAllocPortable);
+
+      // Set the tensor address in the execution context
       if (!context_->setTensorAddress(tensorName, dbuffs_[tensorNameStr].get())) {
         return absl::InternalError(
             absl::StrFormat("Failed to set tensor address for tensor: %s", tensorName));
