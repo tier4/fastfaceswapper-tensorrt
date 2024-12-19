@@ -81,13 +81,13 @@ class InferenceEngine {
   }
 
   // Getter for minimum batch size
-  std::int32_t getMinBatchSize() const { return minBs_; }
+  inline std::int32_t getMinBatchSize() const { return minBs_; }
 
   // Getter for maximum batch size
-  std::int32_t getMaxBatchSize() const { return maxBs_; }
+  inline std::int32_t getMaxBatchSize() const { return maxBs_; }
 
   // Getter for optimized batch size
-  std::int32_t getOptBathSize() const { return optBs_; }
+  inline std::int32_t getOptBathSize() const { return optBs_; }
 
   // Getter for input tensor shapes
   std::unordered_map<std::string, nvinfer1::Dims> getInputShapes(void) const {
@@ -120,7 +120,7 @@ class InferenceEngine {
   }
 
   // Getter for the TensorRT engine
-  const nvinfer1::ICudaEngine& getEngine() const { return *engine_; }
+  inline const nvinfer1::ICudaEngine& getEngine() const { return *engine_; }
 
   // Perform inference on the input data and return the output data
   absl::StatusOr<std::unordered_map<std::string, std::vector<std::uint8_t>>> infer(

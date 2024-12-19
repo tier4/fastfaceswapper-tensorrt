@@ -17,6 +17,7 @@
 
 #include <NvInfer.h>
 
+#include <cv_utils/cv_utils.hpp>
 #include <filesystem>
 #include <iostream>
 #include <opencv2/opencv.hpp>
@@ -27,10 +28,10 @@ namespace ffswp {
 class FastFaceSwapper {
  public:
   // Get 2D image size
-  std::tuple<std::int32_t, std::int32_t> getImgSize() const { return {imgH_, imgW_}; }
+  inline std::tuple<std::int32_t, std::int32_t> getImgSize() const { return {imgH_, imgW_}; }
 
   // Get number of image channels
-  std::int32_t getImgChannels() const { return imgC_; }
+  inline std::int32_t getImgChannels() const { return imgC_; }
 
   // Constructor for FastFaceSwapper class
   // Initializes the inference engine with the provided engine path and logger
@@ -97,7 +98,7 @@ class FastFaceSwapper {
   }
 
   // Swap faces in the source image
-  cv::Mat swap(const cv::Mat& srcImg) { return cv::Mat(); }
+  cv::Mat swap(const cv::Mat& srcImg, bool inplace = false) { return cv::Mat(); }
 
   // Destructor for FastFaceSwapper class
   ~FastFaceSwapper() { std::cout << "FastFaceSwapper destructor" << std::endl; }
