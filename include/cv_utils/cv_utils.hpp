@@ -105,8 +105,9 @@ absl::StatusOr<cv::Mat> crop(const cv::Mat& src, const cv::Rect& roi, const bool
                              double borderValue = 0) {
   const auto andRoi = roi & cv::Rect({}, src.size());
   if (andRoi.empty()) {
-    return absl::Status(absl::StatusCode::kInvalidArgument,
-                        absl::StrFormat("Zero IOU between src & ROI"));
+    return absl::Status(
+        absl::StatusCode::kInvalidArgument,
+        absl::StrFormat("The specified ROI does not intersect with the source image."));
   }
   if (!deepCopy && andRoi == roi) {
     return src(andRoi);
@@ -124,8 +125,9 @@ absl::StatusOr<cv::Mat> embed(
   cv::resize(patch, patchResized, roi.size(), 0, 0, interpolation);
   const auto andRoi = cv::Rect({}, dst.size()) & roi;
   if (andRoi.empty()) {
-    return absl::Status(absl::StatusCode::kInvalidArgument,
-                        absl::StrFormat("Zero IOU between dst & ROI"));
+    return absl::Status(
+        absl::StatusCode::kInvalidArgument,
+        absl::StrFormat("The specified ROI does not intersect with the destination image."));
   }
   if (inplace) {
     patchResized(andRoi - roi.tl()).copyTo(dst(andRoi));
@@ -150,7 +152,7 @@ inline cv::Point_<T> calcCenter(const cv::Rect_<T>& rect) {
 }
 
 // Load rectangle ROIs from a text file
-absl::StatusOr<std::vector<cv::Rect>> loadRoisFromFile(const std::filesystem::path& filePath) {
+absl::StatusOr<std::vector<cv::Rect>> loadROIsFromFile(const std::filesystem::path& filePath) {
   if (!std::filesystem::exists(filePath)) {
     return absl::Status(absl::StatusCode::kNotFound,
                         absl::StrFormat("%s does not exist", filePath));
@@ -172,10 +174,10 @@ absl::StatusOr<std::vector<cv::Rect>> loadRoisFromFile(const std::filesystem::pa
     line = absl::StripAsciiWhitespace(line);
     const std::vector<std::string> split = absl::StrSplit(line, ' ');
     if (split.size() != 4) {
-      return absl::Status(
-          absl::StatusCode::kInternal,
-          absl::StrFormat("Expected 4 floating-point values per line, but L.%d of %s has %d", lno,
-                          filePath, split.size()));
+      return absl::Status(absl::StatusCode::kInternal,
+                          absl::StrFormat("Error at line %d in %s: Expected 4 floating-point "
+                                          "values per line, but found %d values",
+                                          lno, filePath, split.size()));
     }
     std::vector<double> vals;
     for (const auto& s : split) {
@@ -184,7 +186,7 @@ absl::StatusOr<std::vector<cv::Rect>> loadRoisFromFile(const std::filesystem::pa
         return absl::Status(
             absl::StatusCode::kInternal,
             absl::StrFormat(
-                "Could not convert from text to floating-point value (L.%d of %s: \"%s\")", lno,
+                "Error at line %d in %s: Could not convert \"%s\" to a floating-point value", lno,
                 filePath, s));
       }
       vals.push_back(v);
