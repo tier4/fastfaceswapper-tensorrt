@@ -27,6 +27,7 @@
 
 namespace tensorrt_utils {
 
+// Function to convert channel-first data (nchw) to channel-last data
 absl::StatusOr<std::vector<std::uint8_t>> toChannelLast(
     const std::vector<std::uint8_t>& channelFirstData, const std::size_t n, const std::size_t c,
     const std::size_t h, const std::size_t w) {
@@ -49,6 +50,7 @@ absl::StatusOr<std::vector<std::uint8_t>> toChannelLast(
   return channelLastData;
 }
 
+// Function to convert channel-last data to channel-first data (nchw)
 absl::StatusOr<std::vector<std::uint8_t>> toChannelFirst(
     const std::vector<std::uint8_t>& channelLastData, const std::size_t n, const std::size_t c,
     const std::size_t h, const std::size_t w) {
