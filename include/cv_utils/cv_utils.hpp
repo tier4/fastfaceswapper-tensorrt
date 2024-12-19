@@ -26,6 +26,18 @@
 
 namespace cv_utils {
 
+// Ensure the cv::Mat is continuously mapped on memory
+inline cv::Mat makeContinuous(const cv::Mat& img) {
+  if (img.isContinuous()) {
+    return img;
+  } else {
+    return img.clone();
+  }
+}
+
+// Flatten the image to a 1D array
+inline cv::Mat flatten(const cv::Mat& img) { return img.reshape(1, img.total()); }
+
 // Check if the file specified by the given path is a valid image
 inline bool isValidImg(const std::filesystem::path& filePath) {
   return (std::filesystem::exists(filePath) && std::filesystem::is_regular_file(filePath) &&

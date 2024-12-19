@@ -108,7 +108,7 @@ absl::StatusOr<std::tuple<cv::Mat, cv::Mat>> createInput(
 class FastFaceSwapper {
  public:
   // Get 2D image size
-  inline std::tuple<std::int32_t, std::int32_t> getImgSize() const { return {imgH_, imgW_}; }
+  inline cv::Size getImgSize() const { return cv::Size(imgW_, imgH_); }
 
   // Get number of image channels
   inline std::int32_t getImgChannels() const { return imgC_; }
@@ -179,11 +179,68 @@ class FastFaceSwapper {
 
   // Swap faces in the source image
   cv::Mat swap(const cv::Mat& srcImg, const std::vector<cv::Rect>& rois, bool inplace = false) {
-    return cv::Mat();
-  }
+    const auto maxBs = inferEngine_->getMaxBatchSize();
+    for (std::size_t offset = 0; offset < rois.size(); offset += maxBs) {
+      const auto bs = std::min(maxBs, static_cast<std::int32_t>(rois.size() - offset));
+      std::vector<cv::Mat> conditions;
+      std::vector<cv::Mat> masks;
+      for (std::size_t i = 0; i < bs; ++i) {
+        const auto roi = rois[offset + i];
+        // Create input condition and mask
+        // NOTE: Resize and normalize are done inside createInput
+        auto inputOr = createInput(srcImg, roi, getImgSize());
+        if (!inputOr.ok()) {  // NOTE: Skip invalid input
+          continue;
+        }
+        auto [condition, mask] = inputOr.value();
+        conditions.push_back(condition);
+        masks.push_back(mask);
+      }
+      if (conditions.size() == 0 || masks.size() == 0) {  // Skip if no valid input
+        continue;
+      }
 
-  // Destructor for FastFaceSwapper class
-  ~FastFaceSwapper() { std::cout << "FastFaceSwapper destructor" << std::endl; }
+      // Create flatten blob
+      // NOTE: Convert memory format from NHWC to NCHW
+      // Assumes conditions & masks have been already resized and normalized
+      auto batchConditions =
+          cv::dnn::blobFromImages(conditions, 1.0, cv::Size(), cv::Scalar(), true);
+      auto batchMasks = cv::dnn::blobFromImages(masks, 1.0, cv::Size(), cv::Scalar(), true);
+
+      // Set input tensors
+      // std::unordered_map<std::string, std::vector<std::uint8_t>> inputs;
+      // for (std::size_t i = 0; i < bs; ++i) {
+      //   const auto& condition = conditions[i];
+      //   const auto& mask = masks[i];
+      //   const auto conditionSize = condition.total() * condition.elemSize();
+      //   const auto maskSize = mask.total() * mask.elemSize();
+      //   inputs[ioNameCondition_] = std::vector<std::uint8_t>(conditionSize);
+      //   inputs[ioNameMask_] = std::vector<std::uint8_t>(maskSize);
+      //   std::memcpy(inputs[ioNameCondition_].data(), condition.data, conditionSize);
+      //   std::memcpy(inputs[ioNameMask_].data(), mask.data, maskSize);
+      // }
+
+      // // Perform inference
+      // const auto outputsOr = inferEngine_->infer(inputs, bs);
+      // if (!outputsOr.ok()) {
+      //   throw std::runtime_error(
+      //       absl::StrFormat("Failed to perform inference: %s", outputsOr.status().message()));
+      // }
+
+      // // Get output tensors
+      // const auto& outputs = outputsOr.value();
+      // for (std::size_t i = 0; i < bs; ++i) {
+      //   const auto& output = outputs.at(ioNameOutput_);
+      //   const auto outputSize = output.size();
+      //   cv::Mat out(getImgSize(), CV_MAKE_TYPE(CV_32F, getImgChannels()), output.data());
+      //   cv::cvtColor(out, out, cv::COLOR_RGB2BGR);
+      //   cv::resize(out, out, rois[offset + i].size(), 0, 0,
+      //   cv::InterpolationFlags::INTER_LINEAR); out.convertTo(out, CV_MAKE_TYPE(CV_8U,
+      //   getImgChannels()), 255.0); if (in
+      // }
+      return cv::Mat();
+    }
+  }
 
  private:
   std::unique_ptr<tensorrt_utils::InferenceEngine> inferEngine_;  // Inference engine instance
