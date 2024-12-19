@@ -64,7 +64,7 @@ absl::StatusOr<cv::Mat> crop(const cv::Mat& src, const cv::Rect& roi, const bool
   return out;
 }
 
-// Embed image patch `patch` at the rectangle area (`roi`) of the destination image `dst`.
+// Embed the image patch `patch` at the rectangular area (`roi`) of the destination image `dst`.
 absl::StatusOr<cv::Mat> embed(
     cv::Mat& dst, const cv::Rect& roi, const cv::Mat& patch, bool inplace = false,
     cv::InterpolationFlags interpolation = cv::InterpolationFlags::INTER_LINEAR) {
@@ -83,6 +83,17 @@ absl::StatusOr<cv::Mat> embed(
     cv::Mat copied = dst.clone();
     patchResized(andRoi - roi.tl()).copyTo(copied(andRoi));
     return copied;
+  }
+}
+
+// Clip the values of the image to the range [min, max]
+inline cv::Mat clip(cv::Mat& img, double minVal, double maxVal, bool inplace = false) {
+  if (inplace) {
+    cv::max(img, minVal, img);
+    cv::min(img, maxVal, img);
+    return img;
+  } else {
+    return cv::min(cv::max(img, minVal), maxVal);
   }
 }
 

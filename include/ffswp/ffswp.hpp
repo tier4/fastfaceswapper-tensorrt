@@ -23,16 +23,24 @@
 #include <opencv2/opencv.hpp>
 #include <tensorrt_utils/inference_engine.hpp>
 
+#define FFSWP_IMG_C 3
+#define FFSWP_MASK_C 1
+#define FFSWP_DEFAULT_MASK_ROI_VAL (cv::Scalar::all(0.0))
+#define FFSWP_DEFAULT_MASK_BG_VAL (cv::Scalar::all(1.0))
+#define FFSWP_DEFAULT_CONDITION_MINVAL -1.0
+#define FFSWP_DEFAULT_CONDITION_MAXVAL 1.0
+#define FFSWP_DEFAULT_CONDITION_ROI_VAL (cv::Scalar::all(0.0))
+#define FFSWP_DEFAULT_CROP_SCALE 1.7
+
 namespace ffswp {
 
 // Function to create a mask with the given image size and ROI
 absl::StatusOr<cv::Mat> createMask(const cv::Size& imgSize, const cv::Rect& roi,
-                                   const std::size_t channels = 1,
-                                   const cv::Scalar& roiValue = cv::Scalar::all(0),
-                                   const cv::Scalar& bgValue = cv::Scalar::all(1.0)) {
+                                   const cv::Scalar& roiValue = FFSWP_DEFAULT_MASK_ROI_VAL,
+                                   const cv::Scalar& bgValue = FFSWP_DEFAULT_MASK_BG_VAL) {
   // Create a mask with the given image size and number of channels, initialized to the background
   // value
-  cv::Mat mask(imgSize, CV_MAKE_TYPE(CV_32F, channels), bgValue);
+  cv::Mat mask(imgSize, CV_MAKE_TYPE(CV_32F, FFSWP_MASK_C), bgValue);
 
   // Calculate the intersection of the ROI with the image boundaries
   const auto and_roi = roi & cv::Rect({}, mask.size());
@@ -50,21 +58,22 @@ absl::StatusOr<cv::Mat> createMask(const cv::Size& imgSize, const cv::Rect& roi,
 }
 
 // Function to create input images for the face swapping model
-absl::StatusOr<std::tuple<cv::Mat, cv::Mat>> createInput(
+absl::StatusOr<std::tuple<cv::Mat, cv::Mat, cv::Rect>> createInput(
     const cv::Mat& srcImg, const cv::Rect& roi, const cv::Size& inputSize,
-    const double cropScale = 1.4, const std::size_t conditionChannels = 3,
-    const std::tuple<float, float>& conditionValueRange = {-1.0, 1.0},
-    const cv::Scalar& conditionROIValue = cv::Scalar::all(0.0), const std::size_t maskChannels = 1,
-    const cv::Scalar& maskROIValue = cv::Scalar::all(0.0),
-    const cv::Scalar& maskBgValue = cv::Scalar::all(1.0)) {
+    const double cropScale = FFSWP_DEFAULT_CROP_SCALE,
+    const std::tuple<float, float>& conditionValueRange = {FFSWP_DEFAULT_CONDITION_MINVAL,
+                                                           FFSWP_DEFAULT_CONDITION_MAXVAL},
+    const cv::Scalar& conditionROIValue = FFSWP_DEFAULT_CONDITION_ROI_VAL,
+    const cv::Scalar& maskROIValue = FFSWP_DEFAULT_MASK_ROI_VAL,
+    const cv::Scalar& maskBgValue = FFSWP_DEFAULT_MASK_BG_VAL) {
   // Check if the source image is valid
-  if (srcImg.type() != CV_MAKE_TYPE(CV_8U, conditionChannels)) {
+  if (srcImg.type() != CV_MAKE_TYPE(CV_8U, FFSWP_IMG_C)) {
     return absl::Status(
         absl::StatusCode::kInvalidArgument,
-        absl::StrFormat("Invalid source image type. Expected CV_8UC%d.", conditionChannels));
+        absl::StrFormat("Invalid source image type. Expected CV_8UC%d.", FFSWP_IMG_C));
   }
 
-  // Calculate ROI to crop from the source image
+  // Calculate the ROI to crop from the source image
   const auto cropROI =
       cv_utils::scaleRect(cv_utils::calcEnclosingSquare(roi), cropScale, cropScale, true);
 
@@ -77,13 +86,13 @@ absl::StatusOr<std::tuple<cv::Mat, cv::Mat>> createInput(
   }
   cv::Mat cropped = croppedOr.value();
 
-  // Convert color order from bgr to rgb
+  // Convert color order from BGR to RGB
   cv::cvtColor(cropped, cropped, cv::COLOR_BGR2RGB);
 
   // Resize the cropped image to the input size
   cv::resize(cropped, cropped, inputSize, 0, 0, cv::InterpolationFlags::INTER_LINEAR);
 
-  // Normalize values of image to the range conditionValueRange[0]~conditionValueRange[1]
+  // Normalize values of the image to the range conditionValueRange[0]~conditionValueRange[1]
   const auto [conditionMinVal, conditionMaxVal] = conditionValueRange;
   cropped.convertTo(cropped, CV_MAKE_TYPE(CV_32F, cropped.channels()), 1.0 / 255.0);
   cropped = cropped * (conditionMaxVal - conditionMinVal) + conditionMinVal;
@@ -95,14 +104,14 @@ absl::StatusOr<std::tuple<cv::Mat, cv::Mat>> createInput(
   cropped(roiInCropped).setTo(conditionROIValue);
 
   // Create the mask image
-  auto maskOr = createMask(inputSize, roiInCropped, maskChannels, maskROIValue, maskBgValue);
+  auto maskOr = createMask(inputSize, roiInCropped, maskROIValue, maskBgValue);
   if (!maskOr.ok()) {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         absl::StrFormat("Failed to create input: %s", maskOr.status().message()));
   }
 
   // Return the resized image and the mask
-  return std::make_tuple(cropped, maskOr.value());
+  return std::make_tuple(cropped, maskOr.value(), cropROI);
 }
 
 class FastFaceSwapper {
@@ -117,7 +126,7 @@ class FastFaceSwapper {
   inline std::size_t getImgW() const { return imgW_; }
 
   // Get number of image channels
-  inline std::size_t getImgChannels() const { return imgC_; }
+  inline std::size_t getImgC() const { return imgC_; }
 
   // Constructor for FastFaceSwapper class
   // Initializes the inference engine with the provided engine path and logger
@@ -162,50 +171,58 @@ class FastFaceSwapper {
     const auto imgW = dimsCondition.d[3];
 
     // Check channel sizes of io tensors
-    if (!tensorrt_utils::expectDims(dimsCondition, {-1, 3, imgH, imgW})) {
+    if (!tensorrt_utils::expectDims(dimsCondition, {-1, FFSWP_IMG_C, imgH, imgW})) {
       throw std::runtime_error(absl::StrFormat(
-          "Invalid shape for %s tensor of the tensorRT engine: %s (expected {-1, 3, %d, %d}).",
-          ioNameCondition_, tensorrt_utils::dimsToStr(dimsCondition), imgH, imgW));
+          "Invalid shape for %s tensor of the tensorRT engine: %s (expected {-1, %d, %d, %d}).",
+          ioNameCondition_, tensorrt_utils::dimsToStr(dimsCondition), FFSWP_IMG_C, imgH, imgW));
     }
-    if (!tensorrt_utils::expectDims(dimsMask, {-1, 1, imgH, imgW})) {
+    if (!tensorrt_utils::expectDims(dimsMask, {-1, FFSWP_MASK_C, imgH, imgW})) {
       throw std::runtime_error(absl::StrFormat(
-          "Invalid shape for %s tensor of the tensorRT engine: %s (expected {-1, 1, %d, %d}).",
-          ioNameMask_, tensorrt_utils::dimsToStr(dimsMask), imgH, imgW));
+          "Invalid shape for %s tensor of the tensorRT engine: %s (expected {-1, %d, %d, %d}).",
+          ioNameMask_, tensorrt_utils::dimsToStr(dimsMask), FFSWP_MASK_C, imgH, imgW));
     }
-    if (!tensorrt_utils::expectDims(dimsOutput, {-1, 3, imgH, imgW})) {
+    if (!tensorrt_utils::expectDims(dimsOutput, {-1, FFSWP_IMG_C, imgH, imgW})) {
       throw std::runtime_error(absl::StrFormat(
-          "Invalid shape for %s tensor of the tensorRT engine: %s (expected {-1, 3, %d, %d}).",
-          ioNameOutput_, tensorrt_utils::dimsToStr(dimsOutput), imgH, imgW));
+          "Invalid shape for %s tensor of the tensorRT engine: %s (expected {-1, %d, %d, %d}).",
+          ioNameOutput_, tensorrt_utils::dimsToStr(dimsOutput), FFSWP_IMG_C, imgH, imgW));
     }
     // Set image dimensions
     imgH_ = imgH;
     imgW_ = imgW;
-    imgC_ = dimsCondition.d[1];  // Assuming channels are at dimension 1
+    imgC_ = FFSWP_IMG_C;
   }
 
   // Swap faces in the source image
-  absl::StatusOr<cv::Mat> swap(const cv::Mat& srcImg, const std::vector<cv::Rect>& rois) {
+  absl::StatusOr<cv::Mat> swap(
+      cv::Mat& srcImg, const std::vector<cv::Rect>& rois, const bool inplace = false,
+      const double cropScale = FFSWP_DEFAULT_CROP_SCALE,
+      std::tuple<float, float> conditionValueRange = {FFSWP_DEFAULT_CONDITION_MINVAL,
+                                                      FFSWP_DEFAULT_CONDITION_MAXVAL},
+      const cv::Scalar& conditionROIValue = FFSWP_DEFAULT_CONDITION_ROI_VAL) {
+    auto srcImg_ = inplace ? srcImg : srcImg.clone();
     const auto maxBs = inferEngine_->getMaxBatchSize();
+    const auto [conditionMinVal, conditionMaxVal] = conditionValueRange;
     for (std::size_t offset = 0; offset < rois.size(); offset += maxBs) {
       const auto bs = std::min(maxBs, rois.size() - offset);
       std::vector<cv::Mat> conditions;
       std::vector<cv::Mat> masks;
+      std::vector<cv::Rect> cropROIs;
       for (std::size_t i = 0; i < bs; ++i) {
         const auto roi = rois[offset + i];
         // Create input condition and mask
         // NOTE: Resize and normalize are done inside createInput
-        auto inputOr = createInput(srcImg, roi, getImgSize());
-        if (!inputOr.ok()) {  // NOTE: Skip invalid input
-          continue;
+        auto inputOr = createInput(srcImg_, roi, getImgSize(), cropScale, conditionValueRange,
+                                   conditionROIValue);
+        if (!inputOr.ok()) {  // NOTE: Skip invalid inputs
+          return absl::Status(
+              absl::StatusCode::kInternal,
+              absl::StrFormat("Failed to create input: %s", inputOr.status().message()));
         }
-        auto [condition, mask] = inputOr.value();
+        const auto [condition, mask, cropROI] = inputOr.value();
         conditions.push_back(condition);
         masks.push_back(mask);
+        cropROIs.push_back(cropROI);
       }
-      if (conditions.size() == 0 || masks.size() == 0) {  // Skip if no valid input
-        continue;
-      }
-      const auto bsEffective = conditions.size();
 
       // Create flatten blob
       // NOTE: Convert memory format from NHWC to NCHW
@@ -222,8 +239,8 @@ class FastFaceSwapper {
                                          batchMasks.ptr() + cv_utils::bytes(batchMasks));
 
       // Perform inference
-      const auto outputOr = inferEngine_->infer(
-          {{ioNameCondition_, conditionData}, {ioNameMask_, maskData}}, bsEffective);
+      const auto outputOr =
+          inferEngine_->infer({{ioNameCondition_, conditionData}, {ioNameMask_, maskData}}, bs);
       if (!outputOr.ok()) {
         return absl::Status(
             absl::StatusCode::kInternal,
@@ -232,37 +249,49 @@ class FastFaceSwapper {
 
       // NCHW to NHWC
       const auto& outputNCHW = outputOr.value().at(ioNameOutput_);
-      const auto outputNHWC =
-          tensorrt_utils::toChannelLast(outputNCHW, bsEffective, imgC_, imgH_, imgW_);
+      auto outputNHWCOr = tensorrt_utils::toChannelLast(outputNCHW, bs, imgC_, imgH_, imgW_);
+      if (!outputNHWCOr.ok()) {
+        return absl::Status(
+            absl::StatusCode::kInternal,
+            absl::StrFormat("Failed to convert output tensor to NHWC: %s", outputNHWCOr.status()));
+      }
+      auto& outputNHWC = outputNHWCOr.value();
 
-      // Set input tensors
-      // std::unordered_map<std::string, std::vector<std::uint8_t>> inputs;
-      // for (std::size_t i = 0; i < bs; ++i) {
-      //   const auto& condition = conditions[i];
-      //   const auto& mask = masks[i];
-      //   const auto conditionSize = condition.total() * condition.elemSize();
-      //   const auto maskSize = mask.total() * mask.elemSize();
-      //   inputs[ioNameCo
+      // Decode output to cv::Mat
+      for (std::size_t i = 0; i < bs; ++i) {
+        // Get the current ROI
+        const auto roi = rois[offset + i];
 
-      // // Perform inference
-      // const auto outputsOr = inferEngine_->infer(inputs, bs);
-      // if (!outputsOr.ok()) {
-      //   throw std::runtime_error(
-      //       absl::StrFormat("Failed to perform inference: %s", outputsOr.status().message()));
-      // }
+        // Decode the output tensor to a cv::Mat
+        auto decoded =
+            cv::Mat(getImgSize(), CV_MAKE_TYPE(CV_32F, getImgC()),
+                    outputNHWC.data() + i * inferEngine_->getIOFrameSizes().at(ioNameOutput_));
 
-      // // Get output tensors
-      // const auto& outputs = outputsOr.value();
-      // for (std::size_t i = 0; i < bs; ++i) {
-      //   const auto& output = outputs.at(ioNameOutput_);
-      //   const auto outputSize = output.size();
-      //   cv::Mat out(getImgSize(), CV_MAKE_TYPE(CV_32F, getImgChannels()), output.data());
-      //   cv::cvtColor(out, out, cv::COLOR_RGB2BGR);
-      //   cv::resize(out, out, rois[offset + i].size(), 0, 0,
-      //   cv::InterpolationFlags::INTER_LINEAR); out.convertTo(out, CV_MAKE_TYPE(CV_8U,
-      //   getImgChannels()), 255.0); if (in
-      // }
-      return cv::Mat();
+        // Clip the output values to the condition value range
+        cv_utils::clip(decoded, conditionMinVal, conditionMaxVal, true);
+
+        // Convert color order from RGB to BGR
+        cv::cvtColor(decoded, decoded, cv::COLOR_RGB2BGR);
+
+        // Convert the image to 8-bit
+        decoded.convertTo(decoded, CV_MAKE_TYPE(CV_8U, decoded.channels()),
+                          255.0 / (conditionMaxVal - conditionMinVal),
+                          -conditionMinVal * 255.0 / (conditionMaxVal - conditionMinVal));
+
+        // Embed the decoded image back into the source image at the ROI
+        const auto cropROI = cropROIs[i];
+        const auto scaleX = static_cast<double>(imgW_) / cropROI.width;
+        const auto scaleY = static_cast<double>(imgH_) / cropROI.height;
+        const auto roiScaled = cv_utils::scaleRect(roi - cropROI.tl(), scaleX, scaleY);
+        auto embeddedOr = cv_utils::embed(srcImg_, roi, decoded(roiScaled), true);
+        if (!embeddedOr.ok()) {
+          return absl::Status(
+              absl::StatusCode::kInternal,
+              absl::StrFormat("Failed to embed output: %s", embeddedOr.status().message()));
+        }
+      }
+
+      return srcImg_;
     }
   }
 

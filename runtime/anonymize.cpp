@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
   // Create InferenceEngine object
   ffswp::FastFaceSwapper faceSwapper(parsed.engine_path, logger);
   auto imgSize = faceSwapper.getImgSize();
-  auto imgC = faceSwapper.getImgChannels();
+  auto imgC = faceSwapper.getImgC();
   LOG(INFO) << "Image size: " << imgSize;
   LOG(INFO) << "Image channels: " << imgC;
 

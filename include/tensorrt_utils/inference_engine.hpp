@@ -133,6 +133,9 @@ class InferenceEngine {
   // Getter for optimized batch size
   inline std::size_t getOptBathSize() const { return optBs_; }
 
+  // Getter for io tensor frame sizes
+  std::unordered_map<std::string, std::size_t> getIOFrameSizes() const { return frameSizes_; }
+
   // Getter for input tensor shapes
   std::unordered_map<std::string, nvinfer1::Dims> getInputShapes(void) const {
     std::unordered_map<std::string, nvinfer1::Dims> inputShapes;
@@ -192,12 +195,7 @@ class InferenceEngine {
       if (!indexOr.ok()) {
         return absl::InternalError(indexOr.status().message());
       }
-      const auto frameSizeOr = getIOTensorFrameBytes(engine_.get(), indexOr.value());
-      if (!frameSizeOr.ok()) {
-        return absl::InternalError(frameSizeOr.status().message());
-      }
-      const auto frameSize = frameSizeOr.value();
-      const auto totalSize = frameSize * bs;
+      const auto totalSize = frameSizes_.at(tensorNameStr) * bs;
 
       // Validate input data size
       if (data.size() < totalSize) {
@@ -231,12 +229,7 @@ class InferenceEngine {
       if (!indexOr.ok()) {
         return absl::InternalError(indexOr.status().message());
       }
-      const auto frameSizeOr = getIOTensorFrameBytes(engine_.get(), indexOr.value());
-      if (!frameSizeOr.ok()) {
-        return absl::InternalError(frameSizeOr.status().message());
-      }
-      const auto frameSize = frameSizeOr.value();
-      const auto totalSize = frameSize * bs;
+      const auto totalSize = frameSizes_.at(tensorNameStr) * bs;
 
       // Copy output data from device to host
       CHECK_CUDA_ERROR(cudaMemcpyAsync(hbuffs_[tensorNameStr].get(), dbuffs_[tensorNameStr].get(),
@@ -269,6 +262,8 @@ class InferenceEngine {
   std::unordered_map<std::string, cuda_utils::CudaUniquePtr<std::uint8_t[]>> dbuffs_;
   // Host buffers for input/output tensors
   std::unordered_map<std::string, cuda_utils::CudaUniquePtrHost<std::uint8_t[]>> hbuffs_;
+  // Frame sizes for input/output tensors
+  std::unordered_map<std::string, std::size_t> frameSizes_;
   // CUDA stream for asynchronous operations
   cuda_utils::StreamUniquePtr stream_{cuda_utils::makeCudaStream()};
   // Minimum batch size for the engine
@@ -312,6 +307,7 @@ class InferenceEngine {
         return absl::InternalError(frameSizeOr.status().message());
       }
       const auto frameSize = frameSizeOr.value();
+      frameSizes_[tensorNameStr] = frameSize;
       const std::size_t totalSize = frameSize * maxBs_;
 
       // Log the memory allocation details
