@@ -290,9 +290,8 @@ class FastFaceSwapper {
               absl::StrFormat("Failed to embed output: %s", embeddedOr.status().message()));
         }
       }
-
-      return srcImg_;
     }
+    return srcImg_;
   }
 
  private:
@@ -300,10 +299,12 @@ class FastFaceSwapper {
   std::size_t imgH_;                                              // Image height
   std::size_t imgW_;                                              // Image width
   std::size_t imgC_;                                              // Number of image channels
-  std::string ioNameCondition_;
-  std::string ioNameMask_;
-  std::string ioNameOutput_;
+  std::string ioNameCondition_;  // Name of the condition input tensor
+  std::string ioNameMask_;       // Name of the mask input tensor
+  std::string ioNameOutput_;     // Name of the output tensor
 };
+
+;
 
 }  // namespace ffswp
 
