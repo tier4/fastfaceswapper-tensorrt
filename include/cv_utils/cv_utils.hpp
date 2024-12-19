@@ -139,16 +139,32 @@ absl::StatusOr<cv::Mat> embed(
   }
 }
 
-// Template function to scale rect
-template <typename T>
-inline cv::Rect_<T> scaleRect(const cv::Rect_<T>& rect, double scale) {
-  return cv::Rect_<T>(rect.tl() * scale, rect.br() * scale);
-}
-
 // Calculate the center point of rect
 template <typename T>
 inline cv::Point_<T> calcCenter(const cv::Rect_<T>& rect) {
   return cv::Point_<T>(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+}
+
+// Template function to scale rect
+template <typename T>
+cv::Rect_<T> scaleRect(const cv::Rect_<T>& rect, double scaleX, double scaleY,
+                       bool centerPreserved = false) {
+  if (centerPreserved) {
+    cv::Point_<T> center = calcCenter(rect);
+    cv::Size_<T> newSize(rect.width * scaleX, rect.height * scaleY);
+    return cv::Rect_<T>(center - cv::Point_<T>(newSize.width / 2, newSize.height / 2), newSize);
+  } else {
+    return cv::Rect_<T>(rect.tl().x * scaleX, rect.tl().y * scaleY, rect.width * scaleX,
+                        rect.height * scaleY);
+  }
+}
+
+// Calculate the smallest square that encloses the given rect and shares the same center point
+template <typename T>
+cv::Rect_<T> calcEnclosingSquare(const cv::Rect_<T>& rect) {
+  T side = std::max(rect.width, rect.height);
+  cv::Point_<T> center = calcCenter(rect);
+  return cv::Rect_<T>(center.x - side / 2, center.y - side / 2, side, side);
 }
 
 // Load rectangle ROIs from a text file
