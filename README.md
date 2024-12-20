@@ -1,5 +1,9 @@
 # fastfaceswapper-tensorrt
 
+The FastFaceSwapper-TensorRT framework provides a blazingly fast face-swapping tool accelerated by tensorRT.
+
+Currently, we support [deep_privacy2](https://github.com/hukkelas/deep_privacy2) models as the backbone network.
+
 ## DEMO Instructions
 
 ### 1. Build docker image (it would take < 10mins)
@@ -60,4 +64,8 @@ Output
   <img src="data/test/output/regjeringen.jpg" alt="input" widt="1280px">
 </p>
 
+## TODOs
+
+* Add face detection models.
+* Add a realtime face-swapping demo using a web cam.
 
