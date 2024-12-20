@@ -90,6 +90,8 @@ absl::StatusOr<std::tuple<cv::Mat, cv::Mat, cv::Rect>> createInput(
   cv::cvtColor(cropped, cropped, cv::COLOR_BGR2RGB);
 
   // Resize the cropped image to the input size
+  const auto scaleX = static_cast<double>(inputSize.width) / cropped.cols;
+  const auto scaleY = static_cast<double>(inputSize.height) / cropped.rows;
   cv::resize(cropped, cropped, inputSize, 0, 0, cv::InterpolationFlags::INTER_LINEAR);
 
   // Normalize values of the image to the range conditionValueRange[0]~conditionValueRange[1]
@@ -98,20 +100,22 @@ absl::StatusOr<std::tuple<cv::Mat, cv::Mat, cv::Rect>> createInput(
   cropped = cropped * (conditionMaxVal - conditionMinVal) + conditionMinVal;
 
   // Fill the ROI area inside the cropped image with the conditionROIValue
-  auto scaleX = static_cast<double>(inputSize.width) / cropped.cols;
-  auto scaleY = static_cast<double>(inputSize.height) / cropped.rows;
-  auto roiInCropped = cv_utils::scaleRect(roi - cropROI.tl(), scaleX, scaleY);
-  cropped(roiInCropped).setTo(conditionROIValue);
+  const auto roiInCroppedScaled = cv_utils::scaleRect(roi - cropROI.tl(), scaleX, scaleY);
+  auto filledOr = cv_utils::fill(cropped, roiInCroppedScaled, conditionROIValue, false);
+  if (!filledOr.ok()) {
+    return absl::Status(absl::StatusCode::kInvalidArgument,
+                        absl::StrFormat("Failed to create input: %s", filledOr.status().message()));
+  }
 
   // Create the mask image
-  auto maskOr = createMask(inputSize, roiInCropped, maskROIValue, maskBgValue);
+  auto maskOr = createMask(inputSize, roiInCroppedScaled, maskROIValue, maskBgValue);
   if (!maskOr.ok()) {
     return absl::Status(absl::StatusCode::kInvalidArgument,
                         absl::StrFormat("Failed to create input: %s", maskOr.status().message()));
   }
 
   // Return the resized image and the mask
-  return std::make_tuple(cropped, maskOr.value(), cropROI);
+  return std::make_tuple(filledOr.value(), maskOr.value(), cropROI);
 }
 
 class FastFaceSwapper {
@@ -227,10 +231,10 @@ class FastFaceSwapper {
       // Create flatten blob
       // NOTE: Convert memory format from NHWC to NCHW
       // Assumes conditions & masks have been already resized and normalized
-      auto batchConditions = cv_utils::makeContinuous(cv_utils::flatten(
-          cv::dnn::blobFromImages(conditions, 1.0, cv::Size(), cv::Scalar(), true)));
+      auto batchConditions = cv_utils::makeContinuous(
+          cv_utils::flatten(cv::dnn::blobFromImages(conditions, 1.0, cv::Size(), cv::Scalar())));
       auto batchMasks = cv_utils::makeContinuous(
-          cv_utils::flatten(cv::dnn::blobFromImages(masks, 1.0, cv::Size(), cv::Scalar(), true)));
+          cv_utils::flatten(cv::dnn::blobFromImages(masks, 1.0, cv::Size(), cv::Scalar())));
 
       // Convert to byte data
       std::vector<std::uint8_t> conditionData(
@@ -249,13 +253,14 @@ class FastFaceSwapper {
 
       // NCHW to NHWC
       const auto& outputNCHW = outputOr.value().at(ioNameOutput_);
-      auto outputNHWCOr = tensorrt_utils::toChannelLast(outputNCHW, bs, imgC_, imgH_, imgW_);
+      auto outputNHWCOr = tensorrt_utils::toChannelLast(outputNCHW, bs, imgC_, imgH_, imgW_, 4);
       if (!outputNHWCOr.ok()) {
-        return absl::Status(
-            absl::StatusCode::kInternal,
-            absl::StrFormat("Failed to convert output tensor to NHWC: %s", outputNHWCOr.status()));
+        return absl::Status(absl::StatusCode::kInternal,
+                            absl::StrFormat("Failed to convert output tensor to NHWC: %s",
+                                            outputNHWCOr.status().message()));
       }
       auto& outputNHWC = outputNHWCOr.value();
+      assert(outputNHWC.size() == outputNCHW.size());
 
       // Decode output to cv::Mat
       for (std::size_t i = 0; i < bs; ++i) {
@@ -270,13 +275,14 @@ class FastFaceSwapper {
         // Clip the output values to the condition value range
         cv_utils::clip(decoded, conditionMinVal, conditionMaxVal, true);
 
-        // Convert color order from RGB to BGR
-        cv::cvtColor(decoded, decoded, cv::COLOR_RGB2BGR);
-
         // Convert the image to 8-bit
-        decoded.convertTo(decoded, CV_MAKE_TYPE(CV_8U, decoded.channels()),
+        decoded.convertTo(decoded, CV_MAKE_TYPE(CV_32F, decoded.channels()),
                           255.0 / (conditionMaxVal - conditionMinVal),
                           -conditionMinVal * 255.0 / (conditionMaxVal - conditionMinVal));
+        decoded.convertTo(decoded, CV_MAKE_TYPE(CV_8U, decoded.channels()));
+
+        // Convert color order from RGB to BGR
+        cv::cvtColor(decoded, decoded, cv::COLOR_RGB2BGR);
 
         // Embed the decoded image back into the source image at the ROI
         const auto cropROI = cropROIs[i];

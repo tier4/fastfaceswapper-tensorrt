@@ -86,6 +86,25 @@ absl::StatusOr<cv::Mat> embed(
   }
 }
 
+// Fill the rectangular area `roi` of the image `dst` with the specified value `val`.
+absl::StatusOr<cv::Mat> fill(cv::Mat& dst, const cv::Rect& roi, const cv::Scalar& val,
+                             bool inplace = false) {
+  const auto andRoi = cv::Rect({}, dst.size()) & roi;
+  if (andRoi.empty()) {
+    return absl::Status(
+        absl::StatusCode::kInvalidArgument,
+        absl::StrFormat("The specified ROI does not intersect with the destination image."));
+  }
+  if (inplace) {
+    dst(andRoi).setTo(val);
+    return dst;
+  } else {
+    cv::Mat copied = dst.clone();
+    copied(andRoi).setTo(val);
+    return copied;
+  }
+}
+
 // Clip the values of the image to the range [min, max]
 inline cv::Mat clip(cv::Mat& img, double minVal, double maxVal, bool inplace = false) {
   if (inplace) {

@@ -30,19 +30,21 @@ namespace tensorrt_utils {
 // Function to convert channel-first data (nchw) to channel-last data
 absl::StatusOr<std::vector<std::uint8_t>> toChannelLast(
     const std::vector<std::uint8_t>& channelFirstData, const std::size_t n, const std::size_t c,
-    const std::size_t h, const std::size_t w) {
-  const auto totalSize = n * c * h * w;
-  if (channelFirstData.size() != totalSize) {
-    return absl::InvalidArgumentError(absl::StrFormat("Invalid data size: expected %d, but got %d",
-                                                      totalSize, channelFirstData.size()));
+    const std::size_t h, const std::size_t w, const std::size_t elemSize) {
+  if (channelFirstData.size() != n * c * h * w * elemSize) {
+    return absl::InvalidArgumentError(
+        "Input data size does not match the specified dimensions and element size");
   }
-  std::vector<std::uint8_t> channelLastData(n * h * w * c);
+  std::vector<std::uint8_t> channelLastData(n * h * w * c * elemSize);
   for (std::size_t ni = 0; ni < n; ++ni) {
-    for (std::size_t hi = 0; hi < h; ++hi) {
-      for (std::size_t wi = 0; wi < w; ++wi) {
-        for (std::size_t ci = 0; ci < c; ++ci) {
-          channelLastData[ni * h * w * c + hi * w * c + wi * c + ci] =
-              channelFirstData[ni * c * h * w + ci * h * w + hi * w + wi];
+    for (std::size_t ci = 0; ci < c; ++ci) {
+      for (std::size_t hi = 0; hi < h; ++hi) {
+        for (std::size_t wi = 0; wi < w; ++wi) {
+          const auto offsetChannelFirst = (ni * c * h * w + ci * h * w + hi * w + wi) * elemSize;
+          const auto offsetChannelLast = (ni * h * w * c + hi * w * c + wi * c + ci) * elemSize;
+          std::copy(channelFirstData.begin() + offsetChannelFirst,
+                    channelFirstData.begin() + offsetChannelFirst + elemSize,
+                    channelLastData.begin() + offsetChannelLast);
         }
       }
     }
@@ -53,19 +55,21 @@ absl::StatusOr<std::vector<std::uint8_t>> toChannelLast(
 // Function to convert channel-last data to channel-first data (nchw)
 absl::StatusOr<std::vector<std::uint8_t>> toChannelFirst(
     const std::vector<std::uint8_t>& channelLastData, const std::size_t n, const std::size_t c,
-    const std::size_t h, const std::size_t w) {
-  const auto totalSize = n * c * h * w;
-  if (channelLastData.size() != totalSize) {
-    return absl::InvalidArgumentError(absl::StrFormat("Invalid data size: expected %d, but got %d",
-                                                      totalSize, channelLastData.size()));
+    const std::size_t h, const std::size_t w, const std::size_t elemSize) {
+  if (channelLastData.size() != n * h * w * c * elemSize) {
+    return absl::InvalidArgumentError(
+        "Input data size does not match the specified dimensions and element size");
   }
-  std::vector<std::uint8_t> channelFirstData(n * c * h * w);
+  std::vector<std::uint8_t> channelFirstData(n * c * h * w * elemSize);
   for (std::size_t ni = 0; ni < n; ++ni) {
     for (std::size_t hi = 0; hi < h; ++hi) {
       for (std::size_t wi = 0; wi < w; ++wi) {
         for (std::size_t ci = 0; ci < c; ++ci) {
-          channelFirstData[ni * c * h * w + ci * h * w + hi * w + wi] =
-              channelLastData[ni * h * w * c + hi * w * c + wi * c + ci];
+          const auto offsetChannelLast = (ni * h * w * c + hi * w * c + wi * c + ci) * elemSize;
+          const auto offsetChannelFirst = (ni * c * h * w + ci * h * w + hi * w + wi) * elemSize;
+          std::copy(channelLastData.begin() + offsetChannelLast,
+                    channelLastData.begin() + offsetChannelLast + elemSize,
+                    channelFirstData.begin() + offsetChannelFirst);
         }
       }
     }

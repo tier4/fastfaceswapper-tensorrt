@@ -114,15 +114,15 @@ int main(int argc, char** argv) {
     // Load annotations
     auto roisOr = cv_utils::loadROIsFromFile(annotPath);
     if (!roisOr.ok()) {
-      LOG(ERROR) << "Failed to load ROIs from " << annotPath << ": " << roisOr.status().message();
+      LOG(ERROR) << "Failed to load ROIs from " << annotPath << ": " << roisOr.status();
       continue;
     }
     const auto& rois = roisOr.value();
 
     // Swap faces in the source image
-    auto swappedOr = faceSwapper.swap(srcImg, rois, true);
+    auto swappedOr = faceSwapper.swap(srcImg, rois, false);
     if (!swappedOr.ok()) {
-      LOG(ERROR) << "Failed to swap faces in " << imgPath << ": " << swappedOr.status().message();
+      LOG(ERROR) << "Failed to swap faces in " << imgPath << ": " << swappedOr.status();
       continue;
     }
     const auto& swapped = swappedOr.value();
