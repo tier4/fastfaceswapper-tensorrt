@@ -8,25 +8,35 @@ We support [deep_privacy2](https://github.com/hukkelas/deep_privacy2/) models as
 
 ## DEMO Instructions
 
-### 1. Build docker image (it would take < 10mins)
+### 1.a Build binaries (docker)
 
 ```bash
 # At workspace root
 docker build . -t ffswp:latest
-```
-
-### 2. Launch container and enter it
-
-```bash
-# At workspace root
 docker compose run app bash
-```
 
-### 3. Build binaries
-
-```bash
 # At container workdir root
 mkdir build && cd build && cmake .. && make -j
+```
+
+### 1.b Build binaries (local)
+
+```bash
+# Install OpenCV & gflags
+sudo apt install -y libopencv-dev libgflags-dev
+
+# Install abseil
+# NOTE: headers and libaries will be installed at /usr/local/include/ & /usr/local/lib respectively.
+# Optionally add paths to them if not setup yet.
+git clone https://github.com/abseil/abseil-cpp.git && \
+cd abseil-cpp && mkdir build && cd build && \
+cmake -DABSL_BUILD_TESTING=OFF -DABSL_USE_GOOGLETEST_HEAD=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 .. && \
+make -j && sudo make install
+
+# Install tensorRT
+# NOTE: Currently only supports tensorRT 10.x.
+# We are working on multi version support >= 8.x for more portability.
+# See https://docs.nvidia.com/deeplearning/tensorrt/install-guide/index.html#installing-debian for tensorRT instllation
 ```
 
 ### 4. Download onnx
