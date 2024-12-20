@@ -1,8 +1,10 @@
 # fastfaceswapper-tensorrt
 
-The FastFaceSwapper-TensorRT framework provides a blazingly fast face-swapping tool accelerated by tensorRT.
+The FastFaceSwapper framework aims for providing blazingly fast face-swapping runtimes highly accelerated by tensorRT.
+The framework consists of two cascaded DNN-based networks: (1) detection network and (2) swapping network.
+Currently this repository provides the swapping part only (input images and pre-computed bounding boxes of human faces are required); we are hardly working on adding support of the detection part ASAP (sorry for inconvenience).
 
-Currently, we support [deep_privacy2](https://github.com/hukkelas/deep_privacy2) models as the backbone network.
+We support [deep_privacy2](https://github.com/hukkelas/deep_privacy2/) models as the swapping network backbone.
 
 ## DEMO Instructions
 
@@ -66,6 +68,8 @@ Output
 
 ## TODOs
 
-* Add face detection models.
-* Add a realtime face-swapping demo using a web cam.
-
+* Add detection networks.
+* Add a realtime face-swapping demo with a web cam.
+* Add docs for integrating the FastFaceSwapper module into your own project.
+* Add multi version support for tensorRT (we have a plan to support tensorRT >= 8.x, currently works with 10.x).
+* Add more swapping networks.
