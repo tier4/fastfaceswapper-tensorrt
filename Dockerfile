@@ -35,6 +35,7 @@ RUN set -eux; \
         groupadd -g ${GID} ${UNAME}; \
         useradd -m -u ${UID} -g ${GID} -s /bin/bash ${UNAME}; \
     fi; \
+    cp /etc/skel/.bashrc ${UHOME}/.bashrc; \
     chown -R ${UID}:${GID} ${UHOME};
 
 # Switch to non-root user
