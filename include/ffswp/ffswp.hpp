@@ -310,7 +310,7 @@ class FastFaceSwapper {
   std::string ioNameOutput_;     // Name of the output tensor
 };
 
-;
+
 
 }  // namespace ffswp
 
