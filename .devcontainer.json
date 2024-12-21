@@ -1,8 +1,10 @@
 {
   "name": "${localWorkspaceFolderBasename}",
-  "dockerComposeFile": ["docker-compose.yml"],
+  "dockerComposeFile": [
+    "docker-compose.yml"
+  ],
   "service": "app",
-  "workspaceFolder": "/home/ubuntu/app",
+  "workspaceFolder": "/home/ffswp/app",
   "customizations": {
     "vscode": {
       "settings": {
@@ -20,7 +22,10 @@
         },
         "c-cpp-flylint.cppcheck.enable": true,
         "c-cpp-flylint.cppcheck.executable": "/usr/bin/cppcheck",
-        "c-cpp-flylint.cppcheck.extraArgs": ["--enable=all", "--std=c++17"],
+        "c-cpp-flylint.cppcheck.extraArgs": [
+          "--enable=all",
+          "--std=c++17"
+        ],
         "c-cpp-flylint.flawfinder.enable": false,
         "c-cpp-flylint.lizard.enable": false,
         "c-cpp-flylint.pclintplus.enable": false,

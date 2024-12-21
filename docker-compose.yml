@@ -1,11 +1,14 @@
 services:
   app:
     ipc: host
+    image: fastfaceswapper-tensorrt-${TRT_CONTAINER_VERSION:-24.10-py3}
+    container_name: fastfaceswapper-tensorrt-${TRT_CONTAINER_VERSION:-24.10-py3}-app
     build:
       context: .
       dockerfile: ./Dockerfile
       args:
         UID: ${UID:-1000}
+        TRT_CONTAINER_VERSION: ${TRT_CONTAINER_VERSION:-24.10-py3}
     deploy:
       resources:
         reservations:
@@ -17,5 +20,5 @@ services:
     volumes:
       - type: bind
         source: .
-        target: /home/ubuntu/app/
+        target: /home/ffswp/app/
         consistency: delegated
