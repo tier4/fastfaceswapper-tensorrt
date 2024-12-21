@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <NvInfer.h>
+#include <NvInferPlugin.h>
 #include <NvOnnxParser.h>
 #include <absl/log/log.h>
 #include <absl/status/status.h>
@@ -27,15 +28,16 @@
 #include "tensorrt_utils/tensorrt_utils.hpp"
 
 // Define command line flags
-DEFINE_string(onnx_path, "", "Path to the input ONNX file (required).");
-DEFINE_string(out_path, "", "Path to the output TensorRT engine file (required).");
-DEFINE_int32(opt, 3,
-             "Set optimization level from 0 to 5 (optional). Higher levels enable more "
-             "optimizations but take more time.");
-DEFINE_bool(sparsity, false, "Enable 2:4 sparsity optimization? (optional).");
+DEFINE_string(onnx_path, "", "[Required] Path to the input ONNX file.");
+DEFINE_string(out_path, "", "[Required] Path to the output TensorRT engine file.");
+DEFINE_int32(
+    opt, 3,
+    "[Optional] Set optimization level from 0 to 5. Higher levels enable more "
+    "optimizations but take more time. Takes effect only when using TensorRT 8.6 or later.");
+DEFINE_bool(sparsity, false, "[Optional] Enable 2:4 sparsity optimization?");
 DEFINE_string(dtype, "fp16",
-              "Precision to use for the engine (optional). Choose one from {fp32, fp16}.");
-DEFINE_string(bs, "1,16,32", "Minimum, optimal, and maximum batch sizes (optional).");
+              "[Optional] Precision to use for the engine. Choose one from {fp32, fp16}.");
+DEFINE_string(bs, "1,16,32", "[Optional] Minimum, optimal, and maximum batch sizes.");
 
 // Parses a comma-separated string of batch sizes and returns a tuple of three integers.
 absl::StatusOr<std::tuple<std::int32_t, std::int32_t, std::int32_t>> parseBatchSizes(
@@ -115,14 +117,29 @@ int main(int argc, char **argv) {
   // Initialize logger
   auto logger = tensorrt_utils::Logger(nvinfer1::ILogger::Severity::kINFO);
 
+  // Initialize TensorRT plugins
+  // This function is automatically called in TensorRT 8.6 and later
+#if NV_TENSORRT_MAJOR <= 8 && NV_TENSORRT_MINOR <= 5
+  initLibNvInferPlugins(&logger, "");
+#endif
+
   // Initialize TensorRT builder
   auto builder = nvinfer1::createInferBuilder(logger);
+#if NV_TENSORRT_MAJOR >= 10
+  // Since TensorRT 10 implicit batch mode is no longer supported and explicit batch mode is default
   auto network = builder->createNetworkV2(0U);
+#else
+  // Need to explicitly set kEXPLICIT_BATCH flag for TensorRT 8 and below
+  auto network = builder->createNetworkV2(
+      1U << static_cast<std::uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH));
+#endif
   auto config = builder->createBuilderConfig();
 
   // Set optimization level
+#if NV_TENSORRT_MAJOR >= 8 && NV_TENSORRT_MINOR >= 6
   config->setBuilderOptimizationLevel(parsed.opt);
   LOG(INFO) << "Optimization level set to: " << parsed.opt;
+#endif
 
   // Enable sparsity if specified
   if (parsed.sparsity) {
@@ -150,7 +167,7 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
-  // Set placefolder dimensions for dynamic batch shapes
+  // Set placeholder dimensions for dynamic batch shapes
   for (std::int32_t i = 0; i < network->getNbInputs(); ++i) {
     auto tensor = network->getInput(i);
     auto shape = tensor->getDimensions();

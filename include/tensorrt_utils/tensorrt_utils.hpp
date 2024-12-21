@@ -87,22 +87,28 @@ absl::StatusOr<double> dataTypeToBytes(const nvinfer1::DataType dataType) {
       return 4;
     case nvinfer1::DataType::kHALF:
       return 2;
-    case nvinfer1::DataType::kBF16:
-      return 2;
-    case nvinfer1::DataType::kFP8:
-      return 1;
-    case nvinfer1::DataType::kINT64:
-      return 8;
     case nvinfer1::DataType::kINT32:
       return 4;
     case nvinfer1::DataType::kINT8:
       return 1;
     case nvinfer1::DataType::kUINT8:
       return 1;
-    case nvinfer1::DataType::kINT4:
-      return 0.5;
     case nvinfer1::DataType::kBOOL:
       return 0.125;
+#if NV_TENSORRT_MAJOR >= 8 && NV_TENSORRT_MINOR >= 6
+    case nvinfer1::DataType::kFP8:
+      return 1;
+#endif
+#if NV_TENSORRT_MAJOR >= 10
+    case nvinfer1::DataType::kFP8:
+      return 1;
+    case nvinfer1::DataType::kBF16:
+      return 2;
+    case nvinfer1::DataType::kINT64:
+      return 8;
+    case nvinfer1::DataType::kINT4:
+      return 0.5;
+#endif
   }
   return absl::InvalidArgumentError("Unknown data type");
 }

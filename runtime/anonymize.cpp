@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <NvInferPlugin.h>
 #include <gflags/gflags.h>
 
 #include <cv_utils/cv_utils.hpp>
@@ -23,11 +24,11 @@
 #define IMG_DIR_NAME "images"
 #define ANNOT_DIR_NAME "annotations"
 
-DEFINE_string(engine_path, "", "Path to the input tensorRT engine (required).");
+DEFINE_string(engine_path, "", "[Required] Path to the input tensorRT engine.");
 DEFINE_string(data_dir, "",
-              "Path to the root directory containing images and annotations (required).");
+              "[Required] Path to the root directory containing images and annotations.");
 DEFINE_string(out_dir, "",
-              "Path to the output directory (required). If not exists, it will be created.");
+              "[Required] Path to the output directory. If not exists, it will be created.");
 
 // Structure to hold parsed arguments
 typedef struct ParsedArgs {
@@ -73,6 +74,12 @@ int main(int argc, char** argv) {
 
   // Initialize logger
   tensorrt_utils::Logger logger(nvinfer1::ILogger::Severity::kINFO);
+
+  // Initialize TensorRT plugins
+  // This function is automatically called in TensorRT 8.6 and later
+#if NV_TENSORRT_MAJOR <= 8 && NV_TENSORRT_MINOR <= 5
+  initLibNvInferPlugins(&logger, "");
+#endif
 
   // Initialize FastFaceSwapper
   ffswp::FastFaceSwapper faceSwapper(parsed.engine_path, logger);
